@@ -29,7 +29,7 @@ module four_bit_mux(
 	always @(sel or a or b or c or d ) begin
 	if (sel == 2'b00) 
 		y = a;
-	else if (sel == 2'b01) 
+	else if (sel == 2'b01)
 		y = b;
 	else if (sel == 2'b10) 
 		y = c;
