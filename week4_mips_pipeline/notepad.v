@@ -21,7 +21,7 @@
 
 module pipeline (clk, reset, result);
 	input clk, reset;		// clk (5m Hz) feeds clock divider
-	output reg [31:0] result;       // ALU result
+	output [31:0] result;       // ALU result
 
 	// wires in IF stage
 	wire [31:0] PC_in_original;
@@ -117,14 +117,48 @@ module pipeline (clk, reset, result);
 	assign PC_out_unsign_extended = {26'b0000_0000_0000_0000_0000_0000_0, PC_out_short}; // from 8 bits to 32 bits
 	ALU_add_only Unit2 (.inA(PC_out_unsign_extended), .inB(32'b0100), .add_out(PC_plus4)); // PC + 4
 	Mux_N_bit #(32) Unit3 (.in0(PC_plus4), .in1(branch_jump_addr), .mux_out(PC_in_original), .control(PCSrc));
-	// IF_ID_Stage_Reg Unit4 (.PC_plus4_in(PC_plus4), .PC_plus4_out(IF_ID_PC_plus4), .instruction_in(instruction), 
-	//     .instruction_out(IF_ID_instruction), .IF_ID_Write(IF_ID_Write), .IF_Flush(IF_Flush), 
-	// 	.clk(clk), .reset(reset));
+	IF_ID_Stage_Reg Unit4 (.PC_plus4_in(PC_plus4), .PC_plus4_out(IF_ID_PC_plus4), .instruction_in(instruction), 
+	    .instruction_out(IF_ID_instruction), .IF_ID_Write(IF_ID_Write), .IF_Flush(IF_Flush), 
+		.clk(clk), .reset(reset));
+
+	// ID stage
+	Register_File Unit5 (.read_addr_1(multi_purpose_read_addr), .read_addr_2(IF_ID_instruction[20:16]), .write_addr(MEM_WB_RegisterRd),
+	 .read_data_1(reg_read_data_1), .read_data_2(reg_read_data_2), .write_data(reg_write_data), .RegWrite(multi_purpose_RegWrite),
+	  .clk(clkRF), .reset(reset));
+	Sign_Extension Unit6 (.sign_in(IF_ID_instruction[15:0]), .sign_out(immi_sign_extended));
+	// jump within ID stage
+	Shift_Left_2_Jump Unit7 (.shift_in(IF_ID_instruction[25:0]), .shift_out(jump_base28));
+	assign jump_addr = {IF_ID_PC_plus4[31:28], jump_base28}; // jump_addr = (PC+4)[31:28] joined with jump_base28[27:0]
+	Control Unit8 (.OpCode(IF_ID_instruction[31:26]), .RegDst(RegDst), .Jump(Jump), .Branch(Branch), .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite));
+	
+	ID_EX_Stage_Reg Unit9 (.ID_Flush_lwstall(ID_Flush_lwstall), .ID_Flush_Branch(ID_Flush_Branch),
+	 .RegWrite_in(RegWrite), .RegWrite_out(ID_EX_RegWrite),
+	 .MemtoReg_in(MemtoReg), .MemtoReg_out(ID_EX_MemtoReg),
+	 .Branch_in(Branch), .Branch_out(ID_EX_Branch),
+	 .MemRead_in(MemRead), .MemRead_out(ID_EX_MemRead),
+	 .MemWrite_in(MemWrite), .MemWrite_out(ID_EX_MemWrite), 
+	 .Jump_in(Jump), .Jump_out(ID_EX_Jump),   
+	 .RegDst_in(RegDst), .RegDst_out(ID_EX_RegDst),
+	 .ALUSrc_in(ALUSrc), .ALUSrc_out(ID_EX_ALUSrc), 
+	 .ALUOp_in(ALUOp), .ALUOp_out(ID_EX_ALUOp), 
+	 .jump_addr_in(jump_addr), .jump_addr_out(ID_EX_jump_addr),
+	 .PC_plus4_in(IF_ID_PC_plus4), .PC_plus4_out(ID_EX_PC_plus4),
+	 .reg_read_data_1_in(muxC_out), .reg_read_data_1_out(ID_EX_reg_read_data_1),
+	 .reg_read_data_2_in(muxD_out), .reg_read_data_2_out(ID_EX_reg_read_data_2), 
+	 .immi_sign_extended_in(immi_sign_extended), .immi_sign_extended_out(ID_EX_immi_sign_extended), 
+	 .IF_ID_RegisterRs_in(IF_ID_instruction[25:21]), .IF_ID_RegisterRs_out(ID_EX_RegisterRs),
+	 .IF_ID_RegisterRt_in(IF_ID_instruction[20:16]), .IF_ID_RegisterRt_out(ID_EX_RegisterRt),
+	 .IF_ID_RegisterRd_in(IF_ID_instruction[15:11]), .IF_ID_RegisterRd_out(ID_EX_RegisterRd),
+	 .IF_ID_funct_in(IF_ID_instruction[5:0]),.IF_ID_funct_out(ID_EX_funct),.clk(clk),
+	 .reset(reset));
+	
+	assign result = instruction;
 
 	always @(posedge clk) begin
-		result <= instruction;
+
+		// result <= instruction;
 		// // sys status 1: run pipeline processor
-		// clkRF_reg <= clkNormal;		// 1 Hz
+		clkRF_reg <= clkNormal;		// 1 Hz
 		// clk_reg <= clkNormal;		// 1 Hz
 		// multi_purpose_read_addr_reg <= IF_ID_instruction[25:21]; // reg-file-port1 reads from instruction
 		// // reg-file protection measure; explained in "else"
@@ -136,25 +170,6 @@ module pipeline (clk, reset, result);
 		// one_reg <= PC_out_unsign_extended[3:0];
 	end
 
-
-	// // ID stage
-	// Register_File Unit5 (.read_addr_1(multi_purpose_read_addr), .read_addr_2(IF_ID_instruction[20:16]), .write_addr(MEM_WB_RegisterRd),
-	//  .read_data_1(reg_read_data_1), .read_data_2(reg_read_data_2), .write_data(reg_write_data), .RegWrite(multi_purpose_RegWrite),
-	//   .clk(clkRF), .reset(reset));
-	// Sign_Extension Unit6 (.sign_in(IF_ID_instruction[15:0]), .sign_out(immi_sign_extended));
-	// // jump within ID stage
-	// Shift_Left_2_Jump Unit7 (.shift_in(IF_ID_instruction[25:0]), .shift_out(jump_base28));
-	// assign jump_addr = {IF_ID_PC_plus4[31:28], jump_base28}; // jump_addr = (PC+4)[31:28] joined with jump_base28[27:0]
-	// Control Unit8 (.OpCode(IF_ID_instruction[31:26]), .RegDst(RegDst), .Jump(Jump), .Branch(Branch), .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite));
-	// ID_EX_Stage_Reg Unit9 (.ID_Flush_lwstall(ID_Flush_lwstall), .ID_Flush_Branch(ID_Flush_Branch), .RegWrite_in(RegWrite), .MemtoReg_in(MemtoReg), .RegWrite_out(ID_EX_RegWrite), .MemtoReg_out(ID_EX_MemtoReg), .Branch_in(Branch), .MemRead_in(MemRead), .MemWrite_in(MemWrite), .Jump_in(Jump), .Branch_out(ID_EX_Branch), .MemRead_out(ID_EX_MemRead), 
-	// .MemWrite_out(ID_EX_MemWrite), .Jump_out(ID_EX_Jump), .RegDst_in(RegDst), .ALUSrc_in(ALUSrc), .RegDst_out(ID_EX_RegDst), .ALUSrc_out(ID_EX_ALUSrc), .ALUOp_in(ALUOp), .ALUOp_out(ID_EX_ALUOp), .jump_addr_in(jump_addr), .PC_plus4_in(IF_ID_PC_plus4), .jump_addr_out(ID_EX_jump_addr), .PC_plus4_out(ID_EX_PC_plus4),
-	// .reg_read_data_1_in(muxC_out), .reg_read_data_2_in(muxD_out), .immi_sign_extended_in(immi_sign_extended), 
-	// .reg_read_data_1_out(ID_EX_reg_read_data_1), .reg_read_data_2_out(ID_EX_reg_read_data_2), .immi_sign_extended_out(ID_EX_immi_sign_extended), 
-	// .IF_ID_RegisterRs_in(IF_ID_instruction[25:21]), 
-	// .IF_ID_RegisterRt_in(IF_ID_instruction[20:16]), .IF_ID_RegisterRd_in(IF_ID_instruction[15:11]), .IF_ID_RegisterRs_out(ID_EX_RegisterRs), 
-	// .IF_ID_RegisterRt_out(ID_EX_RegisterRt), .IF_ID_RegisterRd_out(ID_EX_RegisterRd), .IF_ID_funct_in(IF_ID_instruction[5:0]),
-	// .IF_ID_funct_out(ID_EX_funct),.clk(clk), .reset(reset));//Ou adds  IF_ID_funct_in and out
-	
 	// // EX stage
 	// Mux_N_bit #(5) Unit10 (.in0(ID_EX_RegisterRt), .in1(ID_EX_RegisterRd), .mux_out(EX_RegisterRd), .control(ID_EX_RegDst));
 	// ALUControl Unit11 (.ALUOp(ID_EX_ALUOp), .funct(ID_EX_funct), .out_to_ALU(out_to_ALU));// Ou modifies: funct should not be IF_ID_instruction. Rather, it should be ID_EX_funct(a new wire)
@@ -712,23 +727,6 @@ module Instruction_Memory (read_addr, instruction, reset);
 		Imemory[1] = 32'b000000_00011_00100_00001_00000_100010; // sub $1, $3, $4
 		Imemory[2] = 32'b100011_00110_00101_0000000000000000; // lw $5, 0($6)
 		Imemory[3] = 32'b000100_00011_00100_1111111111111100; // beq $3, $4, Label (-4)
-
-		// Imemory[0] = 32'b00100000000010000000000000100000; //addi $t0, $zero, 32
-		// Imemory[1] = 32'b00100000000010010000000000110111; //addi $t1, $zero, 55
-		// Imemory[2] = 32'b00000001000010011000000000100000; //add $s0, $t0, $t1
-		// Imemory[3] = 32'b00000001000010011000100000100010; //sub $s1, $t0, $t1
-		// Imemory[4] = 32'b00000001000010011001000000100100; //and $s2, $t0, $t1
-		// Imemory[5] = 32'b00000001000010011001100000100101; //or $s3, $t0, $t1
-		// Imemory[6] = 32'b00000001000010011010000000101010; //slt $s4, $t0, $t1 (LOOP) 
-		// Imemory[7] = 32'b0001001010000000_0000000000000110; //beq $s4, $zero, EXIT
-		// Imemory[8] = 32'b00000001000010010101000000100000; //add $t2, $t0, $t1
-		// Imemory[9] = 32'b00000001010010010101000000100000; //add $t2, $t2, $t1
-		// Imemory[10] = 32'b00000001010010000101100000100000; //add $t3, $t2, $t0
-		// Imemory[11] = 32'b10001100000101010000000000000100; //lw $s5, 4($zero)
-		// Imemory[12] = 32'b00000001010101011011000000100000; //add $s6, $t2, $s5
-		// Imemory[13] = 32'b00000010101010111011100000100000; //add $s7, $s5, $t3
-		// Imemory[14] = 32'b10101100000101010000000000001000; //sw $s5, 8($zero) (EXIT)
-		// Imemory[15] = 32'b00001000000000000000000000000110; //j LOOP
 	end
 endmodule
 
@@ -772,22 +770,23 @@ module Register_File (read_addr_1, read_addr_2, write_addr, read_data_1, read_da
 	reg [31:0] Regfile [31:0];
 	reg [31:0] read_data_1, read_data_2;
 	integer k;
-
-	always @(posedge clk or posedge reset) // Ou combines the block of reset into the block of posedge clk
-	begin
-		if (reset==1'b1)
-		begin
+ 	
+	// Ou combines the block of reset into the block of posedge clk
+	always @(posedge clk or posedge reset) begin
+		if (reset==1'b1) begin
 			for (k=0; k<32; k=k+1) 
 			begin
 				Regfile[k] = 32'b0;
 			end
-		end 
+			Regfile[3] = 32'b0011;
+			Regfile[4] = 32'b0011;
+			Regfile[6] = 32'h0000_0040;
+		end
 		
 		else if (RegWrite == 1'b1) Regfile[write_addr] = write_data; 
 	end
 
-	always @(negedge clk)
-	begin
+	always @(negedge clk) begin
 		read_data_1 = Regfile[read_addr_1];
 		read_data_2 = Regfile[read_addr_2];
 	end
@@ -823,16 +822,37 @@ module Control (OpCode, RegDst, Jump, Branch, MemRead, MemtoReg, ALUOp, MemWrite
 	output RegDst, Jump, Branch, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite;
 	output [1:0] ALUOp;
 
-	assign RegDst=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]);//000000
-	assign Jump=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(~OpCode[0]);//000010
-	assign Branch=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]);//000100
-	assign MemRead=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);//100011
-	assign MemtoReg=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);//100011
-	assign MemWrite=(OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);//101011
-	assign ALUSrc=((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0])) | ((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0])) | ((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0])) | (((OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]))); //001000,001100,100011,101011
-	assign RegWrite=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]) | ((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0])) | ((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0])) | ((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]));//000000,001000,001100,100011
-	assign ALUOp[1]=((~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]))|((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]));//000000, 001100(andi)
-	assign ALUOp[0]= ((~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]))|((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]));//000100,001100(andi)
+	// 000000 : add, sub, and, or, slt
+	// 001000 : addi 
+	// 100011 : lw
+	// 101011 : sw
+	// 000100 : beq
+	// 000010 : j
+
+	// 000000 (R-format)
+	assign RegDst=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]);
+	// 000000 (R-format)
+	assign ALUOp[1]=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]);
+	// 000100 (beq)
+	assign ALUOp[0]=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]);
+	// 100011 (lw), 101011 (sw)
+	assign ALUSrc=((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]))  | 
+					  ((OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0])); 
+	// 000100 (beq)
+	assign Branch=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]);
+	// 100011 (lw)
+	assign MemRead=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
+	// 101011 (sw)
+	assign MemWrite=(OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
+	// 100011 (lw)
+	assign MemtoReg=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
+	// 000000 (R-format), 001000 (addi), 001100, 100011 (lw)
+	assign RegWrite=((~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]))|
+ 	                ((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0])) |
+						 ((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]));
+	// 000010 (j)
+	assign Jump=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(~OpCode[0]);
+	
 endmodule
 
 // async control to generate ALU input signal
