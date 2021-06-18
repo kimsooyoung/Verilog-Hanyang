@@ -152,6 +152,36 @@ module pipeline (clk, reset, result);
 	 .IF_ID_funct_in(IF_ID_instruction[5:0]),.IF_ID_funct_out(ID_EX_funct),.clk(clk),
 	 .reset(reset));
 	
+	// EX stage
+	Mux_N_bit #(5) Unit10 (.in0(ID_EX_RegisterRt), .in1(ID_EX_RegisterRd), .mux_out(EX_RegisterRd), .control(ID_EX_RegDst));
+	// Ou modifies: funct should not be IF_ID_instruction. Rather, it should be ID_EX_funct(a new wire)
+	ALUControl Unit11 (.ALUOp(ID_EX_ALUOp), .funct(ID_EX_funct), .out_to_ALU(out_to_ALU));
+	Mux_32bit_3to1 Unit12_muxA (.in00(ID_EX_reg_read_data_1), .in01(reg_write_data),
+	 .in10(EX_MEM_ALU_result), .mux_out(muxA_out), .control(ForwardA));
+	Mux_32bit_3to1 Unit13_muxB (.in00(ID_EX_reg_read_data_2), .in01(reg_write_data),
+	 .in10(EX_MEM_ALU_result), .mux_out(muxB_out), .control(ForwardB));
+	//Ou modifies: keep the structure paralleled with muxA
+	
+	Mux_N_bit #(32) Unit14 (.in0(muxB_out), .in1(ID_EX_immi_sign_extended), .mux_out(after_ALUSrc), .control(ID_EX_ALUSrc));
+	ALU Unit15 (.inA(muxA_out), .inB(after_ALUSrc), .alu_out(ALU_result), .zero(ALU_zero), .control(out_to_ALU));
+	Shift_Left_2_Branch Unit16 (.shift_in(ID_EX_immi_sign_extended), .shift_out(after_shift));
+	// (PC+4) + branch_addition*4Z
+	ALU_add_only Unit17 (.inA(ID_EX_PC_plus4), .inB(after_shift), .add_out(branch_addr)); 
+	// in EX/MEM stage reg, note muxB_out is used in the place of reg_read_data_2 as a result of forwarding;ygb 
+	EX_MEM_Stage_Reg Unit18 (.EX_Flush(EX_Flush), .RegWrite_in(ID_EX_RegWrite), .RegWrite_out(EX_MEM_RegWrite),
+	.MemtoReg_in(ID_EX_MemtoReg), .MemtoReg_out(EX_MEM_MemtoReg),
+	.Branch_in(ID_EX_Branch), .Branch_out(EX_MEM_Branch),
+	.MemRead_in(ID_EX_MemRead), .MemRead_out(EX_MEM_MemRead),
+	.MemWrite_in(ID_EX_MemWrite),.MemWrite_out(EX_MEM_MemWrite),
+	.Jump_in(ID_EX_Jump), .Jump_out(EX_MEM_Jump),
+	.jump_addr_in(ID_EX_jump_addr), .jump_addr_out(EX_MEM_jump_addr),
+	.branch_addr_in(branch_addr), .branch_addr_out(EX_MEM_branch_addr),
+	.ALU_zero_in(ALU_zero), .ALU_zero_out(EX_MEM_ALU_zero),
+	.ALU_result_in(ALU_result), .ALU_result_out(EX_MEM_ALU_result),
+	.reg_read_data_2_in(muxB_out), .reg_read_data_2_out(EX_MEM_reg_read_data_2), 
+	.ID_EX_RegisterRd_in(EX_RegisterRd), .EX_MEM_RegisterRd_out(EX_MEM_RegisterRd), 
+	.clk(clk), .reset(reset));
+
 	assign result = instruction;
 
 	always @(posedge clk) begin
@@ -170,26 +200,6 @@ module pipeline (clk, reset, result);
 		// one_reg <= PC_out_unsign_extended[3:0];
 	end
 
-	// // EX stage
-	// Mux_N_bit #(5) Unit10 (.in0(ID_EX_RegisterRt), .in1(ID_EX_RegisterRd), .mux_out(EX_RegisterRd), .control(ID_EX_RegDst));
-	// ALUControl Unit11 (.ALUOp(ID_EX_ALUOp), .funct(ID_EX_funct), .out_to_ALU(out_to_ALU));// Ou modifies: funct should not be IF_ID_instruction. Rather, it should be ID_EX_funct(a new wire)
-	// Mux_32bit_3to1 Unit12_muxA (.in00(ID_EX_reg_read_data_1), .in01(reg_write_data), .in10(EX_MEM_ALU_result), .mux_out(muxA_out), .control(ForwardA));
-	// Mux_32bit_3to1 Unit13_muxB (.in00(ID_EX_reg_read_data_2), .in01(reg_write_data), .in10(EX_MEM_ALU_result), .mux_out(muxB_out), .control(ForwardB));//Ou modifies: keep the structure paralleled with muxA
-	// Mux_N_bit #(32) Unit14 (.in0(muxB_out), .in1(ID_EX_immi_sign_extended), .mux_out(after_ALUSrc), .control(ID_EX_ALUSrc));
-	// ALU Unit15 (.inA(muxA_out), .inB(after_ALUSrc), .alu_out(ALU_result), .zero(ALU_zero), .control(out_to_ALU));
-	// Shift_Left_2_Branch Unit16 (.shift_in(ID_EX_immi_sign_extended), .shift_out(after_shift));
-	// ALU_add_only Unit17 (.inA(ID_EX_PC_plus4), .inB(after_shift), .add_out(branch_addr)); // (PC+4) + branch_addition*4Z
-	// // in EX/MEM stage reg, note muxB_out is used in the place of reg_read_data_2 as a result of forwarding;ygb 
-	// EX_MEM_Stage_Reg Unit18 (.EX_Flush(EX_Flush), .RegWrite_in(ID_EX_RegWrite), .MemtoReg_in(ID_EX_MemtoReg), .RegWrite_out(EX_MEM_RegWrite), .MemtoReg_out(EX_MEM_MemtoReg),
-	// .Branch_in(ID_EX_Branch), .MemRead_in(ID_EX_MemRead), .MemWrite_in(ID_EX_MemWrite),
-	// .Jump_in(ID_EX_Jump), .Branch_out(EX_MEM_Branch), .MemRead_out(EX_MEM_MemRead),
-	// .MemWrite_out(EX_MEM_MemWrite), .Jump_out(EX_MEM_Jump), .jump_addr_in(ID_EX_jump_addr), 
-	// .branch_addr_in(branch_addr), .jump_addr_out(EX_MEM_jump_addr), 
-	// .branch_addr_out(EX_MEM_branch_addr), .ALU_zero_in(ALU_zero),
-	// .ALU_zero_out(EX_MEM_ALU_zero), .ALU_result_in(ALU_result), .reg_read_data_2_in(muxB_out), 
-	// .ALU_result_out(EX_MEM_ALU_result), .reg_read_data_2_out(EX_MEM_reg_read_data_2), 
-	// .ID_EX_RegisterRd_in(EX_RegisterRd), .EX_MEM_RegisterRd_out(EX_MEM_RegisterRd), .clk(clk), .reset(reset));
-	
 	// // MEM stage
 	// Data_Memory Unit19 (.addr(EX_MEM_ALU_result[7:0]), .write_data(EX_MEM_reg_read_data_2), .read_data(D_MEM_data),
 	//     .clk(clk), .reset(reset), .MemRead(EX_MEM_MemRead), .MemWrite(EX_MEM_MemWrite));
@@ -864,11 +874,30 @@ module ALUControl (ALUOp, funct, out_to_ALU);
 	input [1:0] ALUOp;
 	input [5:0] funct;
 	output [3:0] out_to_ALU;
-
+	
 	assign out_to_ALU[3]=0;
-	assign out_to_ALU[2]=((~ALUOp[1])&(ALUOp[0])) | ((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(funct[1])&(~funct[0])) | ((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));
-	assign out_to_ALU[1]=((~ALUOp[1])&(~ALUOp[0]))|((~ALUOp[1])&(ALUOp[0])) | ((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(~funct[1])&(~funct[0])) | ((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(funct[1])&(~funct[0]))|((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));
-	assign out_to_ALU[0]=((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(funct[2])&(~funct[1])&(funct[0]))|((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));	
+	// 0  1   | x x x x x x branch => subtract
+	// 1  0   | x x 0 0 1 0 => R-type subtract
+	// 1  0   | x x 1 0 1 0 => R-type slt
+	assign out_to_ALU[2]=((~ALUOp[1])&(ALUOp[0])) |
+						((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(funct[1])&(~funct[0])) |
+						((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));
+	// 0  0   | x x x x x x lw or sw => add	
+	// 0  1   | x x x x x x branch => subtract
+	// 1  0   | x x 0 0 0 0 => R-type add 
+	// 1  0   | x x 0 0 1 0 => R-type subtract
+	// 1  0   | x x 1 0 1 0 => R-type slt
+	assign out_to_ALU[1]=((~ALUOp[1])&(~ALUOp[0])) |
+							   ((~ALUOp[1])&(ALUOp[0]))  |
+								((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(~funct[1])&(~funct[0])) |
+								((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(funct[1])&(~funct[0]))  | 
+								((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));
+	// ALU OP | funct field
+	// 1  0   | x x 0 1 0 1 => R-type Or 
+	// 1  0   | x x 1 0 1 0 => R-type slt
+	assign out_to_ALU[0]=((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(funct[2])&(~funct[1])&(funct[0])) | 
+								((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));	
+
 endmodule
 
 // 32-bit ALU
