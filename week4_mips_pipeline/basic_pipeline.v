@@ -40,7 +40,7 @@ module basic_pipeline (clk, reset, result);
 	wire [4:0] MEM_WB_RegisterRd;
 	wire [31:0] reg_read_data_1, reg_read_data_2;
 
-	wire [31:0] immi_sign_extended;
+	wire [31:0] sign_extended_immi;
 	// jump within ID stage
 	wire [31:0] jump_addr;
 	wire [27:0] jump_base28;
@@ -124,16 +124,21 @@ module basic_pipeline (clk, reset, result);
 	 .instruction_in(IF_Instruction), .instruction_out(ID_instruction),
 	 .clk(clk), .reset(reset));
 
-	// // ID stage
-	// Register_File Unit5 (.read_addr_1(multi_purpose_read_addr), .read_addr_2(IF_ID_instruction[20:16]), .write_addr(MEM_WB_RegisterRd),
-	//  .read_data_1(reg_read_data_1), .read_data_2(reg_read_data_2), .write_data(reg_write_data), .RegWrite(multi_purpose_RegWrite),
-	//   .clk(clkRF), .reset(reset));
-	// Sign_Extension Unit6 (.sign_in(IF_ID_instruction[15:0]), .sign_out(immi_sign_extended));
-	// // jump within ID stage
-	// Shift_Left_2_Jump Unit7 (.shift_in(IF_ID_instruction[25:0]), .shift_out(jump_base28));
-	// assign jump_addr = {IF_ID_PC_plus4[31:28], jump_base28}; // jump_addr = (PC+4)[31:28] joined with jump_base28[27:0]
-	// Control Unit8 (.OpCode(IF_ID_instruction[31:26]), .RegDst(RegDst), .Jump(Jump), .Branch(Branch), .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite));
+	// ID stage
+	Register_File Unit5 (.Read_Register_1(ID_instruction[25:21]), .Read_Register_2(ID_instruction[20:16]), 
+	 .Write_Register(MEM_WB_RegisterRd), .Write_Data(reg_write_data),
+	 .Read_Data_1(reg_read_data_1), .Read_Data_2(reg_read_data_2), .RegWrite(RegWrite),
+	 .clk(clkRF), .reset(reset));
+	Sign_Extension Unit6 (.sign_in(ID_instruction[15:0]), .sign_out(sign_extended_immi));
 	
+	// jump within ID stage
+	// Shift_Left_2_Jump Unit7 (.shift_in(ID_instruction[25:0]), .shift_out(jump_base28));
+	// assign jump_addr = {IF_ID_PC_plus4[31:28], jump_base28}; // jump_addr = (PC+4)[31:28] joined with jump_base28[27:0]
+	Control Unit8 (.OpCode(ID_instruction[31:26]), 
+	 .RegDst(RegDst), .Jump(Jump), .Branch(Branch), 
+	 .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), 
+	 .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite));
+
 	// ID_EX_Stage_Reg Unit9 (.ID_Flush_lwstall(ID_Flush_lwstall), .ID_Flush_Branch(ID_Flush_Branch),
 	//  .RegWrite_in(RegWrite), .RegWrite_out(ID_EX_RegWrite),
 	//  .MemtoReg_in(MemtoReg), .MemtoReg_out(ID_EX_MemtoReg),
@@ -771,34 +776,33 @@ endmodule
 // read: on falling edge; data width 32 bit; address width 5 bit
 // control: write on rising edge if (RegWrite == 1)
 // async reset: set all register content to 0
-module Register_File (read_addr_1, read_addr_2, write_addr, read_data_1, read_data_2, write_data, RegWrite, clk, reset);
-	input [4:0] read_addr_1, read_addr_2, write_addr;
-	input [31:0] write_data;
+module Register_File (Read_Register_1, Read_Register_2, Write_Register, Write_Data, Read_Data_1, Read_Data_2, RegWrite, clk, reset);
+	input [4:0] Read_Register_1, Read_Register_2, Write_Register;
+	input [31:0] Write_Data;
 	input clk, reset, RegWrite;
-	output [31:0] read_data_1, read_data_2;
+	output [31:0] Read_Data_1, Read_Data_2;
 
-	reg [31:0] Regfile [31:0];
-	reg [31:0] read_data_1, read_data_2;
+	reg [31:0] mem [31:0];
+	reg [31:0] Read_Data_1, Read_Data_2;
 	integer k;
  	
 	// Ou combines the block of reset into the block of posedge clk
 	always @(posedge clk or posedge reset) begin
-		if (reset==1'b1) begin
-			for (k=0; k<32; k=k+1) 
-			begin
-				Regfile[k] = 32'b0;
+		if (reset == 1'b1) begin
+			for (k = 0; k < 32; k = k + 1) begin
+				mem[k] = 32'b0;
 			end
-			Regfile[3] = 32'b0011;
-			Regfile[4] = 32'b0011;
-			Regfile[6] = 32'h0000_0040;
+			mem[3] = 32'b0011;
+			mem[4] = 32'b0011;
+			mem[6] = 32'h0000_0040;
 		end
 		
-		else if (RegWrite == 1'b1) Regfile[write_addr] = write_data; 
+		else if (RegWrite == 1'b1) mem[Write_Register] = Write_Data; 
 	end
 
 	always @(negedge clk) begin
-		read_data_1 = Regfile[read_addr_1];
-		read_data_2 = Regfile[read_addr_2];
+		Read_Data_1 = mem[Read_Register_1];
+		Read_Data_2 = mem[Read_Register_2];
 	end
 endmodule
 
