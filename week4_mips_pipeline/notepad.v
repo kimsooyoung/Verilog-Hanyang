@@ -181,13 +181,46 @@ module pipeline (clk, reset, result);
 	.ID_EX_RegisterRd_in(EX_RegisterRd), .EX_MEM_RegisterRd_out(EX_MEM_RegisterRd), 
 	.clk(clk), .reset(reset));
 
+	// MEM stage
+	Data_Memory Unit19 (.MemAddr(EX_MEM_ALU_result[7:0]), .Write_Data(EX_MEM_reg_read_data_2), .Read_Data(D_MEM_data),
+	    .clk(clk), .reset(reset), .MemRead(EX_MEM_MemRead), .MemWrite(EX_MEM_MemWrite));
+	and (Branch_taken, EX_MEM_Branch, EX_MEM_ALU_zero);
+	jump_OR_branch Unit20 (.Jump(EX_MEM_Jump), .Branch_taken(Branch_taken), 
+		.branch_addr(EX_MEM_branch_addr), .jump_addr(EX_MEM_jump_addr), 
+		.PCSrc(PCSrc), .addr_out(branch_jump_addr));
+	MEM_WB_Stage_Reg Unit21 (.RegWrite_in(EX_MEM_RegWrite), .RegWrite_out(MEM_WB_RegWrite), 
+		.MemtoReg_in(EX_MEM_MemtoReg), .MemtoReg_out(MEM_WB_MemtoReg), 
+		.D_MEM_read_data_in(D_MEM_data), .D_MEM_read_data_out(MEM_WB_D_MEM_read_data), 
+		.D_MEM_read_addr_in(EX_MEM_ALU_result), .D_MEM_read_addr_out(MEM_WB_D_MEM_read_addr),
+		.EX_MEM_RegisterRd_in(EX_MEM_RegisterRd), .MEM_WB_RegisterRd_out(MEM_WB_RegisterRd), 
+		.clk(clk), .reset(reset));
+	
+	// WB stage
+	Mux_N_bit #(32) Unit22 (.in0(MEM_WB_D_MEM_read_addr), .in1(MEM_WB_D_MEM_read_data), .mux_out(reg_write_data), .control(MEM_WB_MemtoReg));
+	Forwarding_Control Unit23 (.EX_MEM_RegisterRd(EX_MEM_RegisterRd), 
+		.MEM_WB_RegisterRd(MEM_WB_RegisterRd), 
+		.ID_EX_RegisterRs(ID_EX_RegisterRs), 
+		.ID_EX_RegisterRt(ID_EX_RegisterRt), 
+		.EX_MEM_RegWrite(EX_MEM_RegWrite), 
+		.MEM_WB_RegWrite(MEM_WB_RegWrite), 
+		.IF_ID_RegisterRs(IF_ID_instruction[25:21]),
+		.IF_ID_RegisterRt(IF_ID_instruction[20:16]),
+		.ForwardA(ForwardA), .ForwardB(ForwardB),.ForwardC(ForwardC), .ForwardD(ForwardD));
+	stall_for_lw_Control Unit24 (.ID_EX_RegisterRt(ID_EX_RegisterRt), .IF_ID_RegisterRs(IF_ID_instruction[25:21]), 
+		.IF_ID_RegisterRt(IF_ID_instruction[20:16]), .ID_EX_MemRead(ID_EX_MemRead), .PCWrite(PCWrite), 
+		.IF_ID_Write(IF_ID_Write), .ID_Flush_lwstall(ID_Flush_lwstall));
+	branch_and_jump_hazard_control Unit25 (.MEM_PCSrc(PCSrc), .IF_Flush(IF_Flush), .ID_Flush_Branch(ID_Flush_Branch), .EX_Flush(EX_Flush));
+	
+
 	assign result = instruction;
 
-	always @(posedge clk) begin
+	reg temp;
 
+	always @(posedge clk) begin
+		temp <= clk;
 		// result <= instruction;
 		// // sys status 1: run pipeline processor
-		clkRF_reg <= clkNormal;		// 1 Hz
+		// clkRF_reg <= clkNormal;		// 1 Hz
 		// clk_reg <= clkNormal;		// 1 Hz
 		// multi_purpose_read_addr_reg <= IF_ID_instruction[25:21]; // reg-file-port1 reads from instruction
 		// // reg-file protection measure; explained in "else"
@@ -199,27 +232,6 @@ module pipeline (clk, reset, result);
 		// one_reg <= PC_out_unsign_extended[3:0];
 	end
 
-	// // MEM stage
-	// Data_Memory Unit19 (.addr(EX_MEM_ALU_result[7:0]), .write_data(EX_MEM_reg_read_data_2), .read_data(D_MEM_data),
-	//     .clk(clk), .reset(reset), .MemRead(EX_MEM_MemRead), .MemWrite(EX_MEM_MemWrite));
-	// and (Branch_taken, EX_MEM_Branch, EX_MEM_ALU_zero);
-	// jump_OR_branch Unit20 (.Jump(EX_MEM_Jump), .Branch_taken(Branch_taken), .branch_addr(EX_MEM_branch_addr),
-	//     .jump_addr(EX_MEM_jump_addr), .PCSrc(PCSrc), .addr_out(branch_jump_addr));
-	
-	// //WB stage
-	// MEM_WB_Stage_Reg Unit21 (.RegWrite_in(EX_MEM_RegWrite), .MemtoReg_in(EX_MEM_MemtoReg), .RegWrite_out(MEM_WB_RegWrite), .MemtoReg_out(MEM_WB_MemtoReg), .D_MEM_read_data_in(D_MEM_data), .D_MEM_read_addr_in(EX_MEM_ALU_result), .D_MEM_read_data_out(MEM_WB_D_MEM_read_data), 
-	// .D_MEM_read_addr_out(MEM_WB_D_MEM_read_addr), .EX_MEM_RegisterRd_in(EX_MEM_RegisterRd), .MEM_WB_RegisterRd_out(MEM_WB_RegisterRd), .clk(clk), .reset(reset));
-	
-	// Mux_N_bit #(32) Unit22 (.in0(MEM_WB_D_MEM_read_addr), .in1(MEM_WB_D_MEM_read_data), .mux_out(reg_write_data), .control(MEM_WB_MemtoReg));
-	// Forwarding_Control Utni23 (.EX_MEM_RegisterRd(EX_MEM_RegisterRd), .MEM_WB_RegisterRd(MEM_WB_RegisterRd), 
-	// 	.ID_EX_RegisterRs(ID_EX_RegisterRs), .ID_EX_RegisterRt(ID_EX_RegisterRt), .EX_MEM_RegWrite(EX_MEM_RegWrite), 
-	// 	.MEM_WB_RegWrite(MEM_WB_RegWrite), .IF_ID_RegisterRs(IF_ID_instruction[25:21]),.IF_ID_RegisterRt(IF_ID_instruction[20:16]),
-	// 	.ForwardA(ForwardA), .ForwardB(ForwardB),.ForwardC(ForwardC), .ForwardD(ForwardD));
-	// stall_for_lw_Control Unit24 (.ID_EX_RegisterRt(ID_EX_RegisterRt), .IF_ID_RegisterRs(IF_ID_instruction[25:21]), 
-	// 	.IF_ID_RegisterRt(IF_ID_instruction[20:16]), .ID_EX_MemRead(ID_EX_MemRead), .PCWrite(PCWrite), 
-	// 	.IF_ID_Write(IF_ID_Write), .ID_Flush_lwstall(ID_Flush_lwstall));
-	// branch_and_jump_hazard_control Unit25 (.MEM_PCSrc(PCSrc), .IF_Flush(IF_Flush), .ID_Flush_Branch(ID_Flush_Branch), .EX_Flush(EX_Flush));
-	
 	// // SSD Display
 	// // divide_by_100k Unit_Clock500HZ (.clock(clk), .reset(reset), .clock_out(clkSSD));
 	// // divide_by_500  Unit_Clock1HZ (.clock(clkSSD), .reset(reset), .clock_out(clkNormal));
@@ -960,28 +972,35 @@ endmodule
 // data input/output: 32 bits
 // write: on rising edge, when (MemWrite == 1)
 // read: asynchronous, when (MemRead == 1)
-module Data_Memory (addr, write_data, read_data, clk, reset, MemRead, MemWrite);
-	input [7:0] addr;
-	input [31:0] write_data;
-	output [31:0] read_data;
-	input clk, reset, MemRead, MemWrite;
-	reg [31:0] DMemory [63:0];
+module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrite);
+	input clk, reset;
+	input [7:0] MemAddr;
+	input MemRead, MemWrite;
+	input [31:0] Write_Data;
+	output reg [31:0] Read_Data;
+	
+	reg [31:0] mem [63:0];
 	integer k;
-	wire [5:0] shifted_addr;
-	assign shifted_addr=addr[7:2];
-	assign read_data = (MemRead) ? DMemory[shifted_addr] : 32'bx;
 
 	always @(posedge clk or posedge reset)// Ou modifies reset to posedge
 	begin
-		if (reset == 1'b1) 
-			begin
+		if (reset == 1'b1) begin
 				for (k=0; k<64; k=k+1) begin
-					DMemory[k] = 32'b0;
+					mem[k] <= 32'b0;
 				end
-
-			end
+		end
 		else
-			if (MemWrite) DMemory[shifted_addr] = write_data;
+			if (MemRead && !MemWrite) begin
+				Read_Data <= mem[MemAddr[7:2]];
+			end
+
+			else if (!MemRead && MemWrite) begin
+				mem[MemAddr[7:2]] <= Write_Data;
+			end
+
+			else begin
+				Read_Data <= 32'bx;
+			end
 	end
 endmodule
 
