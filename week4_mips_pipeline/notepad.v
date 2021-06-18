@@ -161,7 +161,6 @@ module pipeline (clk, reset, result);
 	Mux_32bit_3to1 Unit13_muxB (.in00(ID_EX_reg_read_data_2), .in01(reg_write_data),
 	 .in10(EX_MEM_ALU_result), .mux_out(muxB_out), .control(ForwardB));
 	//Ou modifies: keep the structure paralleled with muxA
-	
 	Mux_N_bit #(32) Unit14 (.in0(muxB_out), .in1(ID_EX_immi_sign_extended), .mux_out(after_ALUSrc), .control(ID_EX_ALUSrc));
 	ALU Unit15 (.inA(muxA_out), .inB(after_ALUSrc), .alu_out(ALU_result), .zero(ALU_zero), .control(out_to_ALU));
 	Shift_Left_2_Branch Unit16 (.shift_in(ID_EX_immi_sign_extended), .shift_out(after_shift));
@@ -908,21 +907,39 @@ endmodule
 // as specified in Fig 4.12
 // attached in email as "Fig 4_12 ALU Control Input"
 module ALU (inA, inB, alu_out, zero, control);
+	// TODO : negative number handling
 	input [31:0] inA, inB;
 	output [31:0] alu_out;
 	output zero;
 	reg zero;
 	reg [31:0] alu_out;
 	input [3:0] control;
-	always @ (control or inA or inB)
-	begin
+	always @ (control or inA or inB) begin
 		case (control)
-		4'b0000:begin zero<=0; alu_out<=inA&inB; end
-		4'b0001:begin zero<=0; alu_out<=inA|inB; end
-		4'b0010:begin zero<=0; alu_out<=inA+inB; end
-		4'b0110:begin if(inA==inB) zero<=1; else zero<=0; alu_out<=inA-inB; end
-		4'b0111:begin zero<=0; if(inA-inB>=32'h8000_0000) alu_out<=32'b1; else alu_out<=32'b0; end// how to implement signed number
-		default: begin zero<=0; alu_out<=inA; end
+		// and
+		4'b0000: begin alu_out<=inA&inB; zero<=0; end
+		// or
+		4'b0001: begin alu_out<=inA|inB; zero<=0; end
+		// add
+		4'b0010: begin alu_out<=inA+inB; zero<=0; end
+		// subtract
+		4'b0110: begin 
+			if(inA==inB) 
+			    zero<=1; 
+			else 
+			    zero<=0; 
+				alu_out<=inA-inB; 
+			end
+		// slt 
+		4'b0111: begin 
+			zero<=0; 
+			if(inA-inB>=32'h8000_0000) 
+				alu_out<=32'b1; 
+			else
+				alu_out<=32'b0; 
+			end
+		// how to implement signed number
+		default: begin alu_out<=inA; zero<=0; end
 		endcase
 	end
 endmodule
