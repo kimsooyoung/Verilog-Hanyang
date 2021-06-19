@@ -19,13 +19,20 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1, debug_flag_2);
+module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
+	Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
+	load_data, Beq_address, Write_Register,
+	debug_flag_2, Debug_RegWrite);
 	input clk, reset;		// clk (5m Hz) feeds clock divider
-	output [31:0] result;       // ALU result
-	output [31:0] PC_now;	
+	output [31:0] result, load_data;       // ALU result
+	output [31:0] PC_now, PC_4;	
 	output [31:0] Instruction_now;
-	output [31:0] debug_flag_1;
+	output [31:0] Rs_now, Rt_now;
+	output [31:0] ALU_input_1, ALU_input_2;
+	output [31:0] Beq_address, immi_Shifted;
+	output [4:0] Write_Register;
 	output [31:0] debug_flag_2;
+	output Debug_RegWrite;
 
 	// wires in IF stage
 	wire [31:0] PC_in_original;
@@ -47,14 +54,16 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	wire [31:0] jump_addr;
 	wire [27:0] jump_base28;
 	// control signal generation within ID stage
-	wire RegDst, Jump, Branch, MemRead, MemtoReg, MemWrite;
 	wire ALUSrc, RegWrite;
+	wire RegDst, Jump, Branch;
+	wire MemRead, MemtoReg, MemWrite;
 	wire [1:0] ALUOp;
 
 	// wires in EX stage
 	wire [31:0] ID_EX_jump_addr;
-	wire EX_RegDst, EX_Jump, EX_Branch, EX_MemRead, EX_MemtoReg, EX_MemWrite;
 	wire EX_ALUSrc, EX_RegWrite;
+	wire EX_RegDst, EX_Jump, EX_Branch;
+	wire EX_MemRead, EX_MemtoReg, EX_MemWrite;
 	wire [1:0] EX_ALUOp;
 	wire [31:0] EX_instruction;
 	wire [31:0] EX_sign_extended_immi;
@@ -75,7 +84,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	wire MEM_RegWrite, MEM_MemtoReg, MEM_Branch;
 	wire MEM_MemRead, MEM_MemWrite, MEM_Jump;
 
-	wire [31:0] EX_MEM_jump_addr, EX_MEM_branch_addr;
+	wire [31:0] EX_MEM_jump_addr, MEM_branch_addr;
 	wire MEM_ALU_zero;
 	wire [31:0] MEM_ALU_result, EX_MEM_Read_data_2;
 	wire [31:0] Data_memory_read;
@@ -126,35 +135,33 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	//////////////////////////////////
 	//// Instruction Fetch stage /////
 	//////////////////////////////////
+	Mux_N_bit #(32) Unit3 (.in0(PC_plus4), .in1(MEM_branch_addr), 
+	 .mux_out(PC_in), .control(PCSrc));
 	Program_Counter Unit0 (.clk(clk), .reset(reset),
 	 .PC_in(PC_in), .PC_out(PC_out));
 	Instruction_Memory Unit1 (.address(PC_out),
 	 .instruction(IF_instruction), .reset(reset));
 	// assign PC_out_unsign_extended = {26'b0000_0000_0000_0000_0000_0000_0, PC_out_short}; // from 8 bits to 32 bits
 	ALU_add_only Unit2 (.inA(PC_out), .inB(32'b0100), .add_out(PC_plus4));
-	Mux_N_bit #(32) Unit3 (.in0(PC_plus4), .in1(branch_jump_addr), .mux_out(PC_in), .control(PCSrc));
 	IF_ID_Stage_Reg Unit4 (.clk(clk), .reset(reset),
 	 .PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
 	 .instruction_in(IF_instruction), .instruction_out(ID_instruction));
+	
+	assign PC_now = PC_out;
+	assign Instruction_now = IF_instruction;
 
 	//////////////////////////////////
 	//// Instruction Decode stage ////
 	//////////////////////////////////
+	assign Debug_RegWrite = WB_RegWrite;
+
 	Register_File Unit5 (.clk(clk), .reset(reset),
 	 .Read_Register_1(ID_instruction[25:21]), 
 	 .Read_Register_2(ID_instruction[20:16]), 
 	 .Write_Register(WB_Write_Register), .Write_Data(WB_Write_Data),
-	 .Read_Data_1(Read_data_1), .Read_Data_2(Read_data_2), .RegWrite(RegWrite));
-
-	assign PC_now = PC_out;
-	assign debug_flag_1 = Read_data_1;
-	assign debug_flag_2 = Read_data_2;
-	
-	assign Instruction_now = ID_instruction;
-	assign result = WB_Write_Data;
-
-
+	 .Read_Data_1(Read_data_1), .Read_Data_2(Read_data_2), .RegWrite(WB_RegWrite));
 	Sign_Extension Unit6 (.sign_in(ID_instruction[15:0]), .sign_out(sign_extended_immi));
+
 	// jump within ID stage
 	// Shift_Left_2_Jump Unit7 (.shift_in(ID_instruction[25:0]), .shift_out(jump_base28));
 	// assign jump_addr = {IF_ID_PC_plus4[31:28], jump_base28}; // jump_addr = (PC+4)[31:28] joined with jump_base28[27:0]
@@ -183,7 +190,9 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	 .IF_ID_RegisterRd_in(ID_instruction[15:11]), .IF_ID_RegisterRd_out(ID_EX_RegisterRd),
 	 .IF_ID_funct_in(ID_instruction[5:0]), .IF_ID_funct_out(ID_EX_funct),
 	 .clk(clk), .reset(reset));
-	
+
+	assign Rs_now = Read_data_1;
+	assign Rt_now = Read_data_2;
 
 	//////////////////////////////////
 	///////   Execute  stage  ////////
@@ -198,7 +207,8 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	//Ou modifies: keep the structure paralleled with muxA
 	Mux_N_bit #(32) Unit14 (.in0(EX_Read_data_2), .in1(EX_sign_extended_immi), .mux_out(ALU_input_B), .control(EX_ALUSrc));
 	ALU Unit15 (.inA(EX_Read_data_1), .inB(ALU_input_B), .alu_out(ALU_result), .zero(ALU_zero), .control(operation_code));	
-	Shift_Left_2_Branch Unit16 (.shift_in(EX_sign_extended_immi), .shift_out(Shifted_immi));
+	assign Shifted_immi = { EX_sign_extended_immi[29:0], 2'b00 };
+	// Shift_Left_2_Branch Unit16 (.shift_in(EX_sign_extended_immi), .shift_out(Shifted_immi));
 	// (PC+4) + branch_addition*4Z
 	ALU_add_only Unit17 (.inA(EX_PC_plus4), .inB(Shifted_immi), .add_out(branch_addr)); 
 	// in EX/MEM stage reg, note muxB_out is used in the place of Read_data_2 as a result of forwarding;ygb 
@@ -211,13 +221,20 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	.MemWrite_in(EX_MemWrite),.MemWrite_out(MEM_MemWrite),
 	.Jump_in(EX_Jump), .Jump_out(MEM_Jump),
 	// .jump_addr_in(EX_jump_addr), .jump_addr_out(EX_MEM_jump_addr),
-	.branch_addr_in(branch_addr), .branch_addr_out(EX_MEM_branch_addr),
+	.branch_addr_in(branch_addr), .branch_addr_out(MEM_branch_addr),
 	.ALU_zero_in(ALU_zero), .ALU_zero_out(MEM_ALU_zero),
 	.ALU_result_in(ALU_result), .ALU_result_out(MEM_ALU_result),
 	.Read_data_2_in(EX_Read_data_2), .Read_data_2_out(EX_MEM_Read_data_2), 
 	.RegisterRd_in(EX_Write_Register), .RegisterRd_out(MEM_Write_Register), 
 	.clk(clk), .reset(reset));
 
+	assign PC_4 = EX_PC_plus4;
+	assign immi_Shifted = Shifted_immi;
+	assign ALU_input_1 = EX_Read_data_1;
+	assign ALU_input_2 = ALU_input_B;
+	assign Beq_address = branch_addr;
+	
+	assign result = ALU_result;
 
 	//////////////////////////////////
 	///////   Memory  stage  /////////
@@ -227,8 +244,12 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	    .Read_Data(Data_memory_read), .MemRead(MEM_MemRead), .MemWrite(MEM_MemWrite));
 	and (PCSrc, MEM_Branch, MEM_ALU_zero);
 	// jump_OR_branch Unit20 (.Jump(MEM_Jump), .Branch_taken(Branch_taken), 
-	// 	.branch_addr(EX_MEM_branch_addr), .jump_addr(EX_MEM_jump_addr), 
+	// 	.branch_addr(MEM_branch_addr), .jump_addr(EX_MEM_jump_addr), 
 	// 	.PCSrc(PCSrc), .addr_out(branch_jump_addr));
+	
+	assign debug_flag_2 = MEM_ALU_result;
+	assign load_data = Data_memory_read;
+
 	MEM_WB_Stage_Reg Unit21 (.clk(clk), .reset(reset),
 		.RegWrite_in(MEM_RegWrite), .RegWrite_out(WB_RegWrite), 
 		.MemtoReg_in(MEM_MemtoReg), .MemtoReg_out(WB_MemtoReg), 
@@ -243,8 +264,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1
 	//////////////////////////////////
 	Mux_N_bit #(32) Unit22 (.in0(WB_ALU_result), .in1(WB_Data_memory_read), .mux_out(WB_Write_Data), .control(WB_MemtoReg));
 	
-
-
+	assign Write_Register = WB_Write_Register;
 	
 	// // Forwarding_Control Unit23 (.EX_ MEM_Write_Register(EX_MEM_Write_Register), 
 	// // 	.WB_Write_Register(WB_Write_Register), 
@@ -403,8 +423,7 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 	reg [4:0] IF_ID_RegisterRs_out, IF_ID_RegisterRt_out, IF_ID_RegisterRd_out;
 	reg [5:0] IF_ID_funct_out;
 	
-	always @(posedge clk or posedge reset)
-	begin
+	always @(posedge clk or posedge reset) begin
 		if (reset == 1'b1) begin
 			RegWrite_out = 1'b0;
 			MemtoReg_out = 1'b0;
@@ -792,9 +811,9 @@ module Instruction_Memory (address, instruction, reset);
 
 	// Initial setup at reset posedge
 	always @(posedge reset) begin
-		for (k = 0; k < 8; k = k + 1) begin
-			mem[k] = 32'b0; // reset instruction memory
-		end
+		// for (k = 0; k < 8; k = k + 1) begin
+		// 	mem[k] = 32'b0; // reset instruction memory
+		// end
 
 		mem[0] = 32'b000000_00011_00100_00010_00000_100000; // add $2, $3, $4
 		mem[1] = 32'b000000_00011_00100_00001_00000_100010; // sub $1, $3, $4
@@ -1036,12 +1055,14 @@ module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrit
 	reg [31:0] mem [63:0];
 	integer k;
 
-	always @(posedge clk or posedge reset)// Ou modifies reset to posedge
-	begin
+	always @(posedge clk or posedge reset) begin
 		if (reset == 1'b1) begin
-				for (k=0; k<64; k=k+1) begin
+				for (k = 0; k < 64; k = k + 1) begin
 					mem[k] <= 32'b0;
 				end
+				// mem[8'b0100_0000] <= 32'b0001_1110;
+				// mem[8'b0100_000] <= 32'b0001_1110;
+				mem[16] <= 30;
 		end
 		else
 			if (MemRead && !MemWrite) begin
