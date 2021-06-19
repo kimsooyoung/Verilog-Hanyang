@@ -19,11 +19,13 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module basic_pipeline (clk, reset, result, PC_now, Instruction_now);
+module basic_pipeline (clk, reset, result, PC_now, Instruction_now, debug_flag_1, debug_flag_2);
 	input clk, reset;		// clk (5m Hz) feeds clock divider
 	output [31:0] result;       // ALU result
 	output [31:0] PC_now;	
 	output [31:0] Instruction_now;
+	output [31:0] debug_flag_1;
+	output [31:0] debug_flag_2;
 
 	// wires in IF stage
 	wire [31:0] PC_in_original;
@@ -45,7 +47,8 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now);
 	wire [31:0] jump_addr;
 	wire [27:0] jump_base28;
 	// control signal generation within ID stage
-	wire RegDst, Jump, Branch, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite;
+	wire RegDst, Jump, Branch, MemRead, MemtoReg, MemWrite;
+	wire ALUSrc, RegWrite;
 	wire [1:0] ALUOp;
 
 	// wires in EX stage
@@ -127,26 +130,30 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now);
 	 .PC_in(PC_in), .PC_out(PC_out));
 	Instruction_Memory Unit1 (.address(PC_out),
 	 .instruction(IF_instruction), .reset(reset));
-
-	assign PC_now = PC_out;
-	assign Instruction_now = IF_instruction;
-
 	// assign PC_out_unsign_extended = {26'b0000_0000_0000_0000_0000_0000_0, PC_out_short}; // from 8 bits to 32 bits
 	ALU_add_only Unit2 (.inA(PC_out), .inB(32'b0100), .add_out(PC_plus4));
 	Mux_N_bit #(32) Unit3 (.in0(PC_plus4), .in1(branch_jump_addr), .mux_out(PC_in), .control(PCSrc));
-	IF_ID_Stage_Reg Unit4 (.PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
-	 .instruction_in(IF_instruction), .instruction_out(ID_instruction),
-	 .clk(clk), .reset(reset));
-
-
+	IF_ID_Stage_Reg Unit4 (.clk(clk), .reset(reset),
+	 .PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
+	 .instruction_in(IF_instruction), .instruction_out(ID_instruction));
 
 	//////////////////////////////////
 	//// Instruction Decode stage ////
 	//////////////////////////////////
-	Register_File Unit5 (.Read_Register_1(ID_instruction[25:21]), .Read_Register_2(ID_instruction[20:16]), 
+	Register_File Unit5 (.clk(clk), .reset(reset),
+	 .Read_Register_1(ID_instruction[25:21]), 
+	 .Read_Register_2(ID_instruction[20:16]), 
 	 .Write_Register(WB_Write_Register), .Write_Data(WB_Write_Data),
-	 .Read_Data_1(Read_data_1), .Read_Data_2(Read_data_2), .RegWrite(RegWrite),
-	 .clk(clkRF), .reset(reset));
+	 .Read_Data_1(Read_data_1), .Read_Data_2(Read_data_2), .RegWrite(RegWrite));
+
+	assign PC_now = PC_out;
+	assign debug_flag_1 = Read_data_1;
+	assign debug_flag_2 = Read_data_2;
+	
+	assign Instruction_now = ID_instruction;
+	assign result = WB_Write_Data;
+
+
 	Sign_Extension Unit6 (.sign_in(ID_instruction[15:0]), .sign_out(sign_extended_immi));
 	// jump within ID stage
 	// Shift_Left_2_Jump Unit7 (.shift_in(ID_instruction[25:0]), .shift_out(jump_base28));
@@ -210,7 +217,6 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now);
 	.Read_data_2_in(EX_Read_data_2), .Read_data_2_out(EX_MEM_Read_data_2), 
 	.RegisterRd_in(EX_Write_Register), .RegisterRd_out(MEM_Write_Register), 
 	.clk(clk), .reset(reset));
-	assign result = ALU_result;
 
 
 	//////////////////////////////////
@@ -236,6 +242,9 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now);
 	///   Write Back stage      //////
 	//////////////////////////////////
 	Mux_N_bit #(32) Unit22 (.in0(WB_ALU_result), .in1(WB_Data_memory_read), .mux_out(WB_Write_Data), .control(WB_MemtoReg));
+	
+
+
 	
 	// // Forwarding_Control Unit23 (.EX_ MEM_Write_Register(EX_MEM_Write_Register), 
 	// // 	.WB_Write_Register(WB_Write_Register), 
@@ -825,7 +834,10 @@ endmodule
 // read: on falling edge; data width 32 bit; address width 5 bit
 // control: write on rising edge if (RegWrite == 1)
 // async reset: set all register content to 0
-module Register_File (Read_Register_1, Read_Register_2, Write_Register, Write_Data, Read_Data_1, Read_Data_2, RegWrite, clk, reset);
+module Register_File (Read_Register_1, Read_Register_2, 
+	Write_Register, Write_Data, Read_Data_1, Read_Data_2, 
+	RegWrite, clk, reset);
+
 	input [4:0] Read_Register_1, Read_Register_2, Write_Register;
 	input [31:0] Write_Data;
 	input clk, reset, RegWrite;
