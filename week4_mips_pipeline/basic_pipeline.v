@@ -19,9 +19,11 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module basic_pipeline (clk, reset, result);
+module basic_pipeline (clk, reset, result, PC_now, Instruction_now);
 	input clk, reset;		// clk (5m Hz) feeds clock divider
 	output [31:0] result;       // ALU result
+	output [31:0] PC_now;	
+	output [31:0] Instruction_now;
 
 	// wires in IF stage
 	wire [31:0] PC_in_original;
@@ -78,7 +80,7 @@ module basic_pipeline (clk, reset, result);
 	// wire Branch_taken;
 
 	// wires in WB stage
-	wire [31:0] reg_write_data;
+	wire [31:0] WB_Write_Data;
 	wire WB_RegWrite, WB_MemtoReg;
 	wire [31:0] WB_Data_memory_read, WB_ALU_result;
 	// wires for forwarding
@@ -115,11 +117,13 @@ module basic_pipeline (clk, reset, result);
 	// //new forward, change id_ex stage register
 	// wire ForwardC,ForwardD;
 	// wire [31:0] muxC_out,muxD_out;
-	// Mux_N_bit #(32) Unit26 (.in0(Read_data_1),.in1(reg_write_data),.mux_out(muxC_out),.control(ForwardC));
-	// Mux_N_bit #(32) Unit27 (.in0(Read_data_2),.in1(reg_write_data),.mux_out(muxD_out),.control(ForwardD));
+	// Mux_N_bit #(32) Unit26 (.in0(Read_data_1),.in1(WB_Write_Data),.mux_out(muxC_out),.control(ForwardC));
+	// Mux_N_bit #(32) Unit27 (.in0(Read_data_2),.in1(WB_Write_Data),.mux_out(muxD_out),.control(ForwardD));
 
-	// Instruction Fetch stage
-	Program_Counter Unit0 (.clk(clk), .reset(reset), .PCWrite(PCWrite),
+	//////////////////////////////////
+	//// Instruction Fetch stage /////
+	//////////////////////////////////
+	Program_Counter Unit0 (.clk(clk), .reset(reset),
 	 .PC_in(PC_in), .PC_out(PC_out));
 	Instruction_Memory Unit1 (.read_addr(PC_out),
 	 .instruction(IF_Instruction), .reset(reset));
@@ -130,13 +134,17 @@ module basic_pipeline (clk, reset, result);
 	 .instruction_in(IF_Instruction), .instruction_out(ID_instruction),
 	 .clk(clk), .reset(reset));
 
-	// ID stage
+	assign PC_now = PC_out;
+	assign Instruction_now = IF_Instruction; 
+
+	//////////////////////////////////
+	//// Instruction Decode stage ////
+	//////////////////////////////////
 	Register_File Unit5 (.Read_Register_1(ID_instruction[25:21]), .Read_Register_2(ID_instruction[20:16]), 
-	 .Write_Register(WB_Write_Register), .Write_Data(reg_write_data),
+	 .Write_Register(WB_Write_Register), .Write_Data(WB_Write_Data),
 	 .Read_Data_1(Read_data_1), .Read_Data_2(Read_data_2), .RegWrite(RegWrite),
 	 .clk(clkRF), .reset(reset));
 	Sign_Extension Unit6 (.sign_in(ID_instruction[15:0]), .sign_out(sign_extended_immi));
-	
 	// jump within ID stage
 	// Shift_Left_2_Jump Unit7 (.shift_in(ID_instruction[25:0]), .shift_out(jump_base28));
 	// assign jump_addr = {IF_ID_PC_plus4[31:28], jump_base28}; // jump_addr = (PC+4)[31:28] joined with jump_base28[27:0]
@@ -144,7 +152,6 @@ module basic_pipeline (clk, reset, result);
 	 .RegDst(RegDst), .Jump(Jump), .Branch(Branch), 
 	 .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), 
 	 .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite));
-
 	ID_EX_Stage_Reg Unit9 (
 	 .RegWrite_in(RegWrite), .RegWrite_out(EX_RegWrite),
 	 .MemtoReg_in(MemtoReg), .MemtoReg_out(EX_MemtoReg),
@@ -155,14 +162,11 @@ module basic_pipeline (clk, reset, result);
 	 .RegDst_in(RegDst), .RegDst_out(EX_RegDst),
 	 .ALUSrc_in(ALUSrc), .ALUSrc_out(EX_ALUSrc), 
 	 .ALUOp_in(ALUOp), .ALUOp_out(EX_ALUOp), 
-
 	//  .jump_addr_in(jump_addr), .jump_addr_out(ID_EX_jump_addr),
-
 	 .PC_plus4_in(ID_PC_plus4), .PC_plus4_out(EX_PC_plus4),
 	 .read_data_1_in(Read_data_1), .read_data_1_out(EX_Read_data_1),
 	 .read_data_2_in(Read_data_2), .read_data_2_out(EX_Read_data_2), 
 	 .sign_extended_immi_in(sign_extended_immi), .sign_extended_immi_out(EX_sign_extended_immi), 
-	
 	 .instruction_in(ID_instruction), .instruction_out(EX_instruction),
 	 .IF_ID_RegisterRs_in(ID_instruction[25:21]), .IF_ID_RegisterRs_out(ID_EX_RegisterRs),
 	 .IF_ID_RegisterRt_in(ID_instruction[20:16]), .IF_ID_RegisterRt_out(ID_EX_RegisterRt),
@@ -170,17 +174,20 @@ module basic_pipeline (clk, reset, result);
 	 .IF_ID_funct_in(ID_instruction[5:0]), .IF_ID_funct_out(ID_EX_funct),
 	 .clk(clk), .reset(reset));
 	
-	// EX stage
+
+	//////////////////////////////////
+	///////   Execute  stage  ////////
+	//////////////////////////////////
 	Mux_N_bit #(5) Unit10 (.in0(EX_instruction[20:16]), .in1(EX_instruction[15:11]), .mux_out(EX_Write_Register), .control(EX_RegDst));
 	// Ou modifies: funct should not be IF_ID_instruction. Rather, it should be ID_EX_funct(a new wire)
 	ALUControl Unit11 (.ALUOp(EX_ALUOp), .funct(EX_instruction[5:0]), .operation_code(operation_code));
-	// Mux_32bit_3to1 Unit12_muxA (.in00(ID_EX_Read_data_1), .in01(reg_write_data),
+	// Mux_32bit_3to1 Unit12_muxA (.in00(ID_EX_Read_data_1), .in01(WB_Write_Data),
 	//  .in10(MEM_ALU_result), .mux_out(muxA_out), .control(ForwardA));
-	// Mux_32bit_3to1 Unit13_muxB (.in00(ID_EX_Read_data_2), .in01(reg_write_data),
+	// Mux_32bit_3to1 Unit13_muxB (.in00(ID_EX_Read_data_2), .in01(WB_Write_Data),
 	//  .in10(MEM_ALU_result), .mux_out(muxB_out), .control(ForwardB));
 	//Ou modifies: keep the structure paralleled with muxA
 	Mux_N_bit #(32) Unit14 (.in0(EX_Read_data_2), .in1(EX_sign_extended_immi), .mux_out(ALU_input_B), .control(EX_ALUSrc));
-	ALU Unit15 (.inA(EX_Read_data_1), .inB(ALU_input_B), .alu_out(ALU_result), .zero(ALU_zero), .control(operation_code));
+	ALU Unit15 (.inA(EX_Read_data_1), .inB(ALU_input_B), .alu_out(ALU_result), .zero(ALU_zero), .control(operation_code));	
 	Shift_Left_2_Branch Unit16 (.shift_in(EX_sign_extended_immi), .shift_out(Shifted_immi));
 	// (PC+4) + branch_addition*4Z
 	ALU_add_only Unit17 (.inA(EX_PC_plus4), .inB(Shifted_immi), .add_out(branch_addr)); 
@@ -193,17 +200,19 @@ module basic_pipeline (clk, reset, result);
 	.MemRead_in(EX_MemRead), .MemRead_out(MEM_MemRead),
 	.MemWrite_in(EX_MemWrite),.MemWrite_out(MEM_MemWrite),
 	.Jump_in(EX_Jump), .Jump_out(MEM_Jump),
-
 	// .jump_addr_in(EX_jump_addr), .jump_addr_out(EX_MEM_jump_addr),
-
 	.branch_addr_in(branch_addr), .branch_addr_out(EX_MEM_branch_addr),
 	.ALU_zero_in(ALU_zero), .ALU_zero_out(MEM_ALU_zero),
 	.ALU_result_in(ALU_result), .ALU_result_out(MEM_ALU_result),
 	.Read_data_2_in(EX_Read_data_2), .Read_data_2_out(EX_MEM_Read_data_2), 
 	.RegisterRd_in(EX_Write_Register), .RegisterRd_out(MEM_Write_Register), 
 	.clk(clk), .reset(reset));
+	assign result = ALU_result;
 
-	// MEM stage
+
+	//////////////////////////////////
+	///////   Memory  stage  /////////
+	//////////////////////////////////
 	Data_Memory Unit19 (.clk(clk), .reset(reset),
 		.MemAddr(MEM_ALU_result[7:0]), .Write_Data(EX_MEM_Read_data_2),
 	    .Read_Data(Data_memory_read), .MemRead(MEM_MemRead), .MemWrite(MEM_MemWrite));
@@ -219,8 +228,12 @@ module basic_pipeline (clk, reset, result);
 		.MEM_Write_Register(MEM_Write_Register), .WB_Write_Register(WB_Write_Register)
 		);
 	
-	// // WB stage
-	// Mux_N_bit #(32) Unit22 (.in0(WB_ALU_result), .in1(WB_Data_memory_read), .mux_out(reg_write_data), .control(WB_MemtoReg));
+	
+	//////////////////////////////////
+	///   Write Back stage      //////
+	//////////////////////////////////
+	Mux_N_bit #(32) Unit22 (.in0(WB_ALU_result), .in1(WB_Data_memory_read), .mux_out(WB_Write_Data), .control(WB_MemtoReg));
+	
 	// // Forwarding_Control Unit23 (.EX_ MEM_Write_Register(EX_MEM_Write_Register), 
 	// // 	.WB_Write_Register(WB_Write_Register), 
 	// // 	.ID_EX_RegisterRs(ID_EX_RegisterRs), 
@@ -724,9 +737,8 @@ endmodule
 // output range: decimal 0 to 64 (== I-MEM height)
 // data I/O width: 64 = 2^6
 // async reset: set program counter to 0 asynchronously
-module Program_Counter (clk, reset, PC_in, PC_out, PCWrite);
+module Program_Counter (clk, reset, PC_in, PC_out);
 	input clk, reset;
-	input PCWrite;
 	input [31:0] PC_in;
 
 	output [31:0] PC_out;
@@ -737,7 +749,7 @@ module Program_Counter (clk, reset, PC_in, PC_out, PCWrite);
 	begin
 		if(reset==1'b1)
 			PC_out<=0;
-		else if(PCWrite)
+		else
 			PC_out<=PC_in;
 	end
 endmodule
