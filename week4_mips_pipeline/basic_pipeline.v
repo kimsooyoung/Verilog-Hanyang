@@ -27,7 +27,6 @@ module basic_pipeline (clk, reset, result);
 	wire [31:0] PC_in_original;
 	wire [31:0] PC_in;
 	wire [31:0] PC_out;
-
 	wire [6:0]  PC_out_short;
 	// wire [31:0] PC_out_unsign_extended;
 	wire [31:0] PC_plus4;
@@ -47,12 +46,15 @@ module basic_pipeline (clk, reset, result);
 	// control signal generation within ID stage
 	wire RegDst, Jump, Branch, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite;
 	wire [1:0] ALUOp;
+
+	
 	// wires in EX stage
 	wire ID_EX_RegDst, ID_EX_Jump, ID_EX_Branch, ID_EX_MemRead, ID_EX_MemtoReg, ID_EX_MemWrite, ID_EX_ALUSrc, ID_EX_RegWrite;
+	wire [31:0] IF_instruction;
 	wire [1:0] ID_EX_ALUOp;
 	wire [31:0] ID_EX_jump_addr;
-	wire [31:0] ID_EX_PC_plus4, ID_EX_reg_read_data_1, ID_EX_reg_read_data_2;
-	wire [31:0] ID_EX_immi_sign_extended;
+	wire [31:0] EX_PC_plus4, EX_reg_read_data_1, EX_reg_read_data_2;
+	wire [31:0] EX_sign_extended_immi;
 	wire [4:0] ID_EX_RegisterRs, ID_EX_RegisterRt, ID_EX_RegisterRd;// Ou modifies: [31:0]
 	wire [4:0] EX_RegisterRd;
 	wire [5:0] ID_EX_funct;
@@ -139,26 +141,30 @@ module basic_pipeline (clk, reset, result);
 	 .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), 
 	 .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite));
 
-	// ID_EX_Stage_Reg Unit9 (.ID_Flush_lwstall(ID_Flush_lwstall), .ID_Flush_Branch(ID_Flush_Branch),
-	//  .RegWrite_in(RegWrite), .RegWrite_out(ID_EX_RegWrite),
-	//  .MemtoReg_in(MemtoReg), .MemtoReg_out(ID_EX_MemtoReg),
-	//  .Branch_in(Branch), .Branch_out(ID_EX_Branch),
-	//  .MemRead_in(MemRead), .MemRead_out(ID_EX_MemRead),
-	//  .MemWrite_in(MemWrite), .MemWrite_out(ID_EX_MemWrite), 
-	//  .Jump_in(Jump), .Jump_out(ID_EX_Jump),   
-	//  .RegDst_in(RegDst), .RegDst_out(ID_EX_RegDst),
-	//  .ALUSrc_in(ALUSrc), .ALUSrc_out(ID_EX_ALUSrc), 
-	//  .ALUOp_in(ALUOp), .ALUOp_out(ID_EX_ALUOp), 
+	ID_EX_Stage_Reg Unit9 (
+	 .RegWrite_in(RegWrite), .RegWrite_out(ID_EX_RegWrite),
+	 .MemtoReg_in(MemtoReg), .MemtoReg_out(ID_EX_MemtoReg),
+	 .Branch_in(Branch), .Branch_out(ID_EX_Branch),
+	 .MemRead_in(MemRead), .MemRead_out(ID_EX_MemRead),
+	 .MemWrite_in(MemWrite), .MemWrite_out(ID_EX_MemWrite), 
+	 .Jump_in(Jump), .Jump_out(ID_EX_Jump),   
+	 .RegDst_in(RegDst), .RegDst_out(ID_EX_RegDst),
+	 .ALUSrc_in(ALUSrc), .ALUSrc_out(ID_EX_ALUSrc), 
+	 .ALUOp_in(ALUOp), .ALUOp_out(ID_EX_ALUOp), 
+
 	//  .jump_addr_in(jump_addr), .jump_addr_out(ID_EX_jump_addr),
-	//  .PC_plus4_in(IF_ID_PC_plus4), .PC_plus4_out(ID_EX_PC_plus4),
-	//  .reg_read_data_1_in(muxC_out), .reg_read_data_1_out(ID_EX_reg_read_data_1),
-	//  .reg_read_data_2_in(muxD_out), .reg_read_data_2_out(ID_EX_reg_read_data_2), 
-	//  .immi_sign_extended_in(immi_sign_extended), .immi_sign_extended_out(ID_EX_immi_sign_extended), 
-	//  .IF_ID_RegisterRs_in(IF_ID_instruction[25:21]), .IF_ID_RegisterRs_out(ID_EX_RegisterRs),
-	//  .IF_ID_RegisterRt_in(IF_ID_instruction[20:16]), .IF_ID_RegisterRt_out(ID_EX_RegisterRt),
-	//  .IF_ID_RegisterRd_in(IF_ID_instruction[15:11]), .IF_ID_RegisterRd_out(ID_EX_RegisterRd),
-	//  .IF_ID_funct_in(IF_ID_instruction[5:0]),.IF_ID_funct_out(ID_EX_funct),.clk(clk),
-	//  .reset(reset));
+
+	 .PC_plus4_in(ID_PC_plus4), .PC_plus4_out(EX_PC_plus4),
+	 .reg_read_data_1_in(reg_read_data_1), .reg_read_data_1_out(EX_reg_read_data_1),
+	 .reg_read_data_2_in(reg_read_data_2), .reg_read_data_2_out(EX_reg_read_data_2), 
+	 .sign_extended_immi_in(sign_extended_immi), .sign_extended_immi_out(EX_sign_extended_immi), 
+	
+	 .instruction_in(ID_instruction), .instruction_out(IF_instruction),
+	 .IF_ID_RegisterRs_in(ID_instruction[25:21]), .IF_ID_RegisterRs_out(ID_EX_RegisterRs),
+	 .IF_ID_RegisterRt_in(ID_instruction[20:16]), .IF_ID_RegisterRt_out(ID_EX_RegisterRt),
+	 .IF_ID_RegisterRd_in(ID_instruction[15:11]), .IF_ID_RegisterRd_out(ID_EX_RegisterRd),
+	 .IF_ID_funct_in(ID_instruction[5:0]), .IF_ID_funct_out(ID_EX_funct),
+	 .clk(clk), .reset(reset));
 	
 	// // EX stage
 	// Mux_N_bit #(5) Unit10 (.in0(ID_EX_RegisterRt), .in1(ID_EX_RegisterRd), .mux_out(EX_RegisterRd), .control(ID_EX_RegDst));
@@ -169,9 +175,9 @@ module basic_pipeline (clk, reset, result);
 	// Mux_32bit_3to1 Unit13_muxB (.in00(ID_EX_reg_read_data_2), .in01(reg_write_data),
 	//  .in10(EX_MEM_ALU_result), .mux_out(muxB_out), .control(ForwardB));
 	// //Ou modifies: keep the structure paralleled with muxA
-	// Mux_N_bit #(32) Unit14 (.in0(muxB_out), .in1(ID_EX_immi_sign_extended), .mux_out(after_ALUSrc), .control(ID_EX_ALUSrc));
+	// Mux_N_bit #(32) Unit14 (.in0(muxB_out), .in1(EX_sign_extended_immi), .mux_out(after_ALUSrc), .control(ID_EX_ALUSrc));
 	// ALU Unit15 (.inA(muxA_out), .inB(after_ALUSrc), .alu_out(ALU_result), .zero(ALU_zero), .control(out_to_ALU));
-	// Shift_Left_2_Branch Unit16 (.shift_in(ID_EX_immi_sign_extended), .shift_out(after_shift));
+	// Shift_Left_2_Branch Unit16 (.shift_in(EX_sign_extended_immi), .shift_out(after_shift));
 	// // (PC+4) + branch_addition*4Z
 	// ALU_add_only Unit17 (.inA(ID_EX_PC_plus4), .inB(after_shift), .add_out(branch_addr)); 
 	// // in EX/MEM stage reg, note muxB_out is used in the place of reg_read_data_2 as a result of forwarding;ygb 
@@ -303,12 +309,21 @@ endmodule
 
 // ID/EX stage register
 // update content & output updated content at rising edge
-module ID_EX_Stage_Reg (ID_Flush_lwstall, ID_Flush_Branch, RegWrite_in, MemtoReg_in, RegWrite_out, MemtoReg_out, Branch_in, MemRead_in, MemWrite_in, Jump_in, Branch_out, MemRead_out, MemWrite_out, Jump_out, RegDst_in, ALUSrc_in, RegDst_out, ALUSrc_out, ALUOp_in, ALUOp_out, jump_addr_in, PC_plus4_in, jump_addr_out, PC_plus4_out, reg_read_data_1_in, reg_read_data_2_in, immi_sign_extended_in, reg_read_data_1_out, reg_read_data_2_out, immi_sign_extended_out, IF_ID_RegisterRs_in, IF_ID_RegisterRt_in, IF_ID_RegisterRd_in, IF_ID_RegisterRs_out, IF_ID_RegisterRt_out, IF_ID_RegisterRd_out,IF_ID_funct_in, IF_ID_funct_out,clk, reset);
+module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, MemtoReg_out,
+	Branch_in, Branch_out, MemRead_in, MemRead_out, MemWrite_in, MemWrite_out,
+	Jump_in, Jump_out, RegDst_in, RegDst_out, ALUSrc_in, ALUSrc_out, ALUOp_in, ALUOp_out,
+	PC_plus4_in, PC_plus4_out, reg_read_data_1_in, reg_read_data_1_out, 
+	reg_read_data_2_in, reg_read_data_2_out, 
+	sign_extended_immi_in, sign_extended_immi_out,
+	instruction_in, instruction_out,
+	IF_ID_RegisterRs_in, IF_ID_RegisterRt_in, 
+	IF_ID_RegisterRd_in, IF_ID_RegisterRs_out, IF_ID_RegisterRt_out, 
+	IF_ID_RegisterRd_out,IF_ID_funct_in, IF_ID_funct_out);
 	// 1. hazard control signal (sync rising edge)
 	// if either ID_Flush_lwstall or ID_Flush_Branch equals 1,
 	// then clear all WB, MEM and EX control signal to 0 on rising edge
 	// do not need to clear addr, data or reg content
-	input ID_Flush_lwstall, ID_Flush_Branch;
+	// input ID_Flush_lwstall, ID_Flush_Branch;
 	// 2. WB control signal
 	input RegWrite_in, MemtoReg_in;
 	output RegWrite_out, MemtoReg_out;
@@ -318,15 +333,18 @@ module ID_EX_Stage_Reg (ID_Flush_lwstall, ID_Flush_Branch, RegWrite_in, MemtoReg
 	// 4. EX control signal
 	input RegDst_in, ALUSrc_in;
 	input [1:0] ALUOp_in;
+
 	output RegDst_out, ALUSrc_out;
 	output [1:0] ALUOp_out;
 	// 5. addr content
-	input [31:0] jump_addr_in, PC_plus4_in;
-	output [31:0] jump_addr_out, PC_plus4_out;
+	input [31:0] PC_plus4_in;
+	output [31:0] PC_plus4_out;
 	// 6. data content
-	input [31:0] reg_read_data_1_in, reg_read_data_2_in, immi_sign_extended_in;
-	output [31:0] reg_read_data_1_out, reg_read_data_2_out, immi_sign_extended_out;
+	input [31:0] reg_read_data_1_in, reg_read_data_2_in, sign_extended_immi_in;
+	output [31:0] reg_read_data_1_out, reg_read_data_2_out, sign_extended_immi_out;
 	// 7. reg content
+	input [31:0] instruction_in;
+	output [31:0] instruction_out;
 	input [4:0] IF_ID_RegisterRs_in, IF_ID_RegisterRt_in, IF_ID_RegisterRd_in;
 	output [4:0] IF_ID_RegisterRs_out, IF_ID_RegisterRt_out, IF_ID_RegisterRd_out;
 	input [5:0] IF_ID_funct_in;
@@ -339,15 +357,15 @@ module ID_EX_Stage_Reg (ID_Flush_lwstall, ID_Flush_Branch, RegWrite_in, MemtoReg
 	reg Branch_out, MemRead_out, MemWrite_out, Jump_out;
 	reg RegDst_out, ALUSrc_out;
 	reg [1:0] ALUOp_out;
-	reg [31:0] jump_addr_out, PC_plus4_out;
-	reg [31:0] reg_read_data_1_out, reg_read_data_2_out, immi_sign_extended_out;
+	reg [31:0] instruction_out;
+	reg [31:0] PC_plus4_out;
+	reg [31:0] reg_read_data_1_out, reg_read_data_2_out, sign_extended_immi_out;
 	reg [4:0] IF_ID_RegisterRs_out, IF_ID_RegisterRt_out, IF_ID_RegisterRd_out;
 	reg [5:0] IF_ID_funct_out;
 	
 	always @(posedge clk or posedge reset)
 	begin
-		if (reset == 1'b1)
-		begin
+		if (reset == 1'b1) begin
 			RegWrite_out = 1'b0;
 			MemtoReg_out = 1'b0;
 			Branch_out = 1'b0;
@@ -357,40 +375,39 @@ module ID_EX_Stage_Reg (ID_Flush_lwstall, ID_Flush_Branch, RegWrite_in, MemtoReg
 			RegDst_out = 1'b0;
 			ALUSrc_out = 1'b0;
 			ALUOp_out = 2'b0;
-			jump_addr_out = 32'b0;
+			// jump_addr_out = 32'b0;
 			PC_plus4_out = 32'b0;
 			reg_read_data_1_out = 32'b0;
 			reg_read_data_2_out = 32'b0;
-			immi_sign_extended_out = 32'b0;
+			sign_extended_immi_out = 32'b0;
+			instruction_out = 32'b0;
 			IF_ID_RegisterRs_out = 5'b0;
 			IF_ID_RegisterRt_out = 5'b0;
 			IF_ID_RegisterRd_out = 5'b0;
 			IF_ID_funct_out = 6'b0;			
 		end
-		else if (ID_Flush_lwstall == 1'b1)
-		begin
-			RegWrite_out = 1'b0;
-			MemtoReg_out = 1'b0;
-			Branch_out = 1'b0;
-			MemRead_out = 1'b0;
-			MemWrite_out = 1'b0;
-			Jump_out = 1'b0;
-			RegDst_out = 1'b0;
-			ALUSrc_out = 1'b0;
-			ALUOp_out = 2'b0;
-		end
-		else if (ID_Flush_Branch == 1'b1)
-		begin
-			RegWrite_out = 1'b0;
-			MemtoReg_out = 1'b0;
-			Branch_out = 1'b0;
-			MemRead_out = 1'b0;
-			MemWrite_out = 1'b0;
-			Jump_out = 1'b0;
-			RegDst_out = 1'b0;
-			ALUSrc_out = 1'b0;
-			ALUOp_out = 2'b0;
-		end
+		// else if (ID_Flush_lwstall == 1'b1) begin
+		// 	RegWrite_out = 1'b0;
+		// 	MemtoReg_out = 1'b0;
+		// 	Branch_out = 1'b0;
+		// 	MemRead_out = 1'b0;
+		// 	MemWrite_out = 1'b0;
+		// 	Jump_out = 1'b0;
+		// 	RegDst_out = 1'b0;
+		// 	ALUSrc_out = 1'b0;
+		// 	ALUOp_out = 2'b0;
+		// end
+		// else if (ID_Flush_Branch == 1'b1) begin
+		// 	RegWrite_out = 1'b0;
+		// 	MemtoReg_out = 1'b0;
+		// 	Branch_out = 1'b0;
+		// 	MemRead_out = 1'b0;
+		// 	MemWrite_out = 1'b0;
+		// 	Jump_out = 1'b0;
+		// 	RegDst_out = 1'b0;
+		// 	ALUSrc_out = 1'b0;
+		// 	ALUOp_out = 2'b0;
+		// end
 		else begin
 			RegWrite_out = RegWrite_in;
 			MemtoReg_out = MemtoReg_in;
@@ -401,11 +418,12 @@ module ID_EX_Stage_Reg (ID_Flush_lwstall, ID_Flush_Branch, RegWrite_in, MemtoReg
 			RegDst_out = RegDst_in;
 			ALUSrc_out = ALUSrc_in;
 			ALUOp_out = ALUOp_in;
-			jump_addr_out = jump_addr_in;
+			// jump_addr_out = jump_addr_in;
 			PC_plus4_out = PC_plus4_in;
 			reg_read_data_1_out = reg_read_data_1_in;
 			reg_read_data_2_out = reg_read_data_2_in;
-			immi_sign_extended_out = immi_sign_extended_in;
+			sign_extended_immi_out = sign_extended_immi_in;
+			instruction_out = instruction_in;
 			IF_ID_RegisterRs_out = IF_ID_RegisterRs_in;
 			IF_ID_RegisterRt_out = IF_ID_RegisterRt_in;
 			IF_ID_RegisterRd_out = IF_ID_RegisterRd_in;
