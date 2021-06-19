@@ -22,7 +22,7 @@
 module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
 	load_data, Beq_address, Write_Register,
-	debug_flag_2, Debug_RegWrite);
+	debug_flag_2, Debug_RegWrite, Debug_Write_Data);
 	input clk, reset;		// clk (5m Hz) feeds clock divider
 	output [31:0] result, load_data;       // ALU result
 	output [31:0] PC_now, PC_4;	
@@ -31,7 +31,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	output [31:0] ALU_input_1, ALU_input_2;
 	output [31:0] Beq_address, immi_Shifted;
 	output [4:0] Write_Register;
-	output [31:0] debug_flag_2;
+	output [31:0] debug_flag_2, Debug_Write_Data;
 	output Debug_RegWrite;
 
 	// wires in IF stage
@@ -154,6 +154,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	//// Instruction Decode stage ////
 	//////////////////////////////////
 	assign Debug_RegWrite = WB_RegWrite;
+	assign Debug_Write_Data = WB_Write_Data;
 
 	Register_File Unit5 (.clk(clk), .reset(reset),
 	 .Read_Register_1(ID_instruction[25:21]), 
@@ -811,9 +812,9 @@ module Instruction_Memory (address, instruction, reset);
 
 	// Initial setup at reset posedge
 	always @(posedge reset) begin
-		// for (k = 0; k < 8; k = k + 1) begin
-		// 	mem[k] = 32'b0; // reset instruction memory
-		// end
+		for (k = 0; k < 8; k = k + 1) begin
+			mem[k] = 32'b0; // reset instruction memory
+		end
 
 		mem[0] = 32'b000000_00011_00100_00010_00000_100000; // add $2, $3, $4
 		mem[1] = 32'b000000_00011_00100_00001_00000_100010; // sub $1, $3, $4
@@ -1050,32 +1051,34 @@ module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrit
 	input [7:0] MemAddr;
 	input MemRead, MemWrite;
 	input [31:0] Write_Data;
-	output reg [31:0] Read_Data;
+	output [31:0] Read_Data;
+	reg [31:0] Read_Data;
+
+	// assign Read_Data = (MemRead) ? mem[MemAddr[7:2]] : 32'bx;
 	
 	reg [31:0] mem [63:0];
 	integer k;
 
-	always @(posedge clk or posedge reset) begin
+	always @(*) begin
 		if (reset == 1'b1) begin
-				for (k = 0; k < 64; k = k + 1) begin
-					mem[k] <= 32'b0;
-				end
-				// mem[8'b0100_0000] <= 32'b0001_1110;
-				// mem[8'b0100_000] <= 32'b0001_1110;
-				mem[16] <= 30;
+			for (k = 0; k < 64; k = k + 1) begin
+				mem[k] = 32'b0;
+			end
+			mem[16] = 30;
 		end
+
 		else
 			if (MemRead && !MemWrite) begin
-				Read_Data <= mem[MemAddr[7:2]];
+				Read_Data = mem[MemAddr[7:2]];
 			end
 
 			else if (!MemRead && MemWrite) begin
-				mem[MemAddr[7:2]] <= Write_Data;
+				mem[MemAddr[7:2]] = Write_Data;
 			end
 
-			else begin
-				Read_Data <= 32'bx;
-			end
+		else begin
+			Read_Data = 32'bx;
+		end
 	end
 endmodule
 
