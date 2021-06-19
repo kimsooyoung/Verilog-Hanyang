@@ -125,17 +125,20 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now);
 	//////////////////////////////////
 	Program_Counter Unit0 (.clk(clk), .reset(reset),
 	 .PC_in(PC_in), .PC_out(PC_out));
-	Instruction_Memory Unit1 (.read_addr(PC_out),
-	 .instruction(IF_Instruction), .reset(reset));
+	Instruction_Memory Unit1 (.address(PC_out),
+	 .instruction(IF_instruction), .reset(reset));
+
+	assign PC_now = PC_out;
+	assign Instruction_now = IF_instruction;
+
 	// assign PC_out_unsign_extended = {26'b0000_0000_0000_0000_0000_0000_0, PC_out_short}; // from 8 bits to 32 bits
 	ALU_add_only Unit2 (.inA(PC_out), .inB(32'b0100), .add_out(PC_plus4));
 	Mux_N_bit #(32) Unit3 (.in0(PC_plus4), .in1(branch_jump_addr), .mux_out(PC_in), .control(PCSrc));
 	IF_ID_Stage_Reg Unit4 (.PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
-	 .instruction_in(IF_Instruction), .instruction_out(ID_instruction),
+	 .instruction_in(IF_instruction), .instruction_out(ID_instruction),
 	 .clk(clk), .reset(reset));
 
-	assign PC_now = PC_out;
-	assign Instruction_now = IF_Instruction; 
+
 
 	//////////////////////////////////
 	//// Instruction Decode stage ////
@@ -295,7 +298,8 @@ endmodule
 
 // IF/ID stage register
 // update content & output updated content at rising edge
-module IF_ID_Stage_Reg (PC_plus4_in, PC_plus4_out, instruction_in, instruction_out, clk, reset);
+module IF_ID_Stage_Reg (clk, reset, PC_plus4_in, PC_plus4_out, 
+	instruction_in, instruction_out);
 	// 1. data content
 	input [31:0] PC_plus4_in, instruction_in;
 	output [31:0] PC_plus4_out, instruction_out;
@@ -315,6 +319,11 @@ module IF_ID_Stage_Reg (PC_plus4_in, PC_plus4_out, instruction_in, instruction_o
 			instruction_out <= 32'b0;
 		end
 
+		else begin
+			PC_plus4_out <= PC_plus4_in;
+			instruction_out <= instruction_in;
+		end
+
 		// else if (IF_Flush==1'b1) begin
 		// 	PC_plus4_out <= 32'b0;
 		// 	instruction_out <= 32'b0;
@@ -324,7 +333,6 @@ module IF_ID_Stage_Reg (PC_plus4_in, PC_plus4_out, instruction_in, instruction_o
 		// 	PC_plus4_out <= PC_plus4_in;
 		// 	instruction_out <= instruction_in;
 		// end
-
 	end
 	
 endmodule
@@ -764,14 +772,14 @@ endmodule
 // instruction output width: 32 bits (== I-MEM width)
 // async reset: as specified in document "Project Two Specification (V3)", 
 // 		  		first reset all to 0, then hard-code instructions
-module Instruction_Memory (read_addr, instruction, reset);
+module Instruction_Memory (address, instruction, reset);
 	input reset;
-	input [6:0] read_addr;
+	input [31:0] address;
 	output [31:0] instruction;
-	reg [31:0] mem [7:0];
+	reg [31:0] mem [7:0]; // 8 instruction
 	integer k;
 	
-	assign instruction = mem[read_addr[6:2]];
+	assign instruction = mem[address[6:2]]; // 8 instructions
 
 	// Initial setup at reset posedge
 	always @(posedge reset) begin
