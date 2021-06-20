@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
+// Company: Hanyang Univ.
+// Engineer: Kim Soo Young
 // 
 // Create Date:    13:14:17 06/02/2021 
 // Design Name: 
@@ -15,7 +15,7 @@
 //
 // Revision: 
 // Revision 0.01 - File Created
-// Additional Comments: https://github.com/hxing9974/Verilog-Pipeline-Processor/blob/master/pipeline_v10_demo.v#L130
+// Additional Comments: 
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -23,23 +23,22 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
 	load_data, Beq_address, Write_Register,
 	debug_flag_2, Debug_RegWrite, Debug_Write_Data);
-	input clk, reset;		// clk (5m Hz) feeds clock divider
-	output [31:0] result, load_data;       // ALU result
-	output [31:0] PC_now, PC_4;	
-	output [31:0] Instruction_now;
-	output [31:0] Rs_now, Rt_now;
-	output [31:0] ALU_input_1, ALU_input_2;
-	output [31:0] Beq_address, immi_Shifted;
-	output [4:0] Write_Register;
-	output [31:0] debug_flag_2, Debug_Write_Data;
-	output Debug_RegWrite;
+
+
+	input clk, reset; // clk (5m Hz) feeds clock divider
+	output [31:0] result, load_data; // ALU result, Data_memory_read
+	output [31:0] PC_now; // current PC value Debugging,  
+	output [31:0] Instruction_now; // Fetch stage instruction 
+	output [31:0] Rs_now, Rt_now; // output from Register File 
+	output [31:0] ALU_input_1, ALU_input_2; // ALU inputs
+	output [31:0] PC_4, Beq_address, immi_Shifted; // for Branch Address Debugging
+	output [4:0] Write_Register; // Rd value
+	output [31:0] debug_flag_2, Debug_Write_Data; // ALU_result in MEM stage, Write_Data for Register File
+	output Debug_RegWrite; // RegWrite Op Flag
 
 	// wires in IF stage
-	wire [31:0] PC_in_original;
 	wire [31:0] PC_in;
 	wire [31:0] PC_out;
-	wire [6:0]  PC_out_short;
-	// wire [31:0] PC_out_unsign_extended;
 	wire [31:0] PC_plus4;
 	wire [31:0] IF_instruction;
 	wire [31:0] branch_jump_addr;
@@ -141,7 +140,6 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	 .PC_in(PC_in), .PC_out(PC_out));
 	Instruction_Memory Unit1 (.address(PC_out),
 	 .instruction(IF_instruction), .reset(reset));
-	// assign PC_out_unsign_extended = {26'b0000_0000_0000_0000_0000_0000_0, PC_out_short}; // from 8 bits to 32 bits
 	ALU_add_only Unit2 (.inA(PC_out), .inB(32'b0100), .add_out(PC_plus4));
 	IF_ID_Stage_Reg Unit4 (.clk(clk), .reset(reset),
 	 .PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
@@ -264,65 +262,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	///   Write Back stage      //////
 	//////////////////////////////////
 	Mux_N_bit #(32) Unit22 (.in0(WB_ALU_result), .in1(WB_Data_memory_read), .mux_out(WB_Write_Data), .control(WB_MemtoReg));
-	
 	assign Write_Register = WB_Write_Register;
-	
-	// // Forwarding_Control Unit23 (.EX_ MEM_Write_Register(EX_MEM_Write_Register), 
-	// // 	.WB_Write_Register(WB_Write_Register), 
-	// // 	.ID_EX_RegisterRs(ID_EX_RegisterRs), 
-	// // 	.ID_EX_RegisterRt(ID_EX_RegisterRt), 
-	// // 	.MEM_RegWrite(MEM_RegWrite), 
-	// // 	.WB_RegWrite(WB_RegWrite), 
-	// // 	.IF_ID_RegisterRs(IF_ID_instruction[25:21]),
-	// // 	.IF_ID_RegisterRt(IF_ID_instruction[20:16]),
-	// // 	.ForwardA(ForwardA), .ForwardB(ForwardB),.ForwardC(ForwardC), .ForwardD(ForwardD));
-	// // stall_for_lw_Control Unit24 (.ID_EX_RegisterRt(ID_EX_RegisterRt), .IF_ID_RegisterRs(IF_ID_instruction[25:21]), 
-	// // 	.IF_ID_RegisterRt(IF_ID_instruction[20:16]), .ID_EX_MemRead(ID_EX_MemRead), .PCWrite(PCWrite), 
-	// // 	.IF_ID_Write(IF_ID_Write), .ID_Flush_lwstall(ID_Flush_lwstall));
-	// // branch_and_jump_hazard_control Unit25 (.MEM_PCSrc(PCSrc), .IF_Flush(IF_Flush), .ID_Flush_Branch(ID_Flush_Branch), .EX_Flush(EX_Flush));
-	
-
-	// assign result = instruction;
-
-	// reg temp;
-
-	// always @(posedge clk) begin
-	// 	temp <= clk;
-	// end
-
-	// // SSD Display
-	// // divide_by_100k Unit_Clock500HZ (.clock(clk), .reset(reset), .clock_out(clkSSD));
-	// // divide_by_500  Unit_Clock1HZ (.clock(clkSSD), .reset(reset), .clock_out(clkNormal));
-	// // Ring_4_counter Unit_Ring_Counter (.clock(clkSSD), .reset(reset), .Q(AN));
-	// // ssd_driver	Unit_SSDTHO (.in_BCD(tho), .out_SSD(thossd));
-	// // ssd_driver	Unit_SSDHUN (.in_BCD(hun), .out_SSD(hunssd));
-	// // ssd_driver	Unit_SSDTEN (.in_BCD(ten), .out_SSD(tenssd));
-	// // ssd_driver	Unit_SSDONE (.in_BCD(one), .out_SSD(onessd));
-
-	// // assign clkRF = clkRF_reg;
-	// // assign clk = clk_reg;
-
-	// assign multi_purpose_read_addr = multi_purpose_read_addr_reg;
-	// assign multi_purpose_RegWrite = multi_purpose_RegWrite_reg;
-	// assign tho = tho_reg;
-	// assign hun = hun_reg;
-	// assign ten = ten_reg;
-	// assign one = one_reg;
-
-	// // always @(switchRun or clkSSD) begin
-	// always @(posedge clk) begin
-	// 	// sys status 1: run pipeline processor
-	// 	clkRF_reg <= clkNormal;		// 1 Hz
-	// 	clk_reg <= clkNormal;		// 1 Hz
-	// 	multi_purpose_read_addr_reg <= IF_ID_instruction[25:21]; // reg-file-port1 reads from instruction
-	// 	// reg-file protection measure; explained in "else"
-	// 	multi_purpose_RegWrite_reg <= WB_RegWrite;
-	// 	// output PC to SSD, but since PC only has 6 bits
-	// 	tho_reg <= PC_out_unsign_extended[15:12];	// always 0
-	// 	hun_reg <= PC_out_unsign_extended[11:8];	// always 0
-	// 	ten_reg <= PC_out_unsign_extended[7:4];
-	// 	one_reg <= PC_out_unsign_extended[3:0];
-	// end
 
 endmodule
 
