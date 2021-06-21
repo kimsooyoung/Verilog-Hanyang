@@ -19,21 +19,27 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
-	Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
-	load_data, Beq_address, Write_Register,
-	debug_flag_2, Debug_RegWrite, Debug_Write_Data);
+module basic_pipeline (clk, reset, result
+	// PC_now, Instruction_now,
+	// Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
+	// load_data, Beq_address, Write_Register,
+	// debug_flag_2, Debug_RegWrite, Debug_Write_Data
+	);
 
 	input clk, reset;
-	output [31:0] result, load_data; // ALU result, Data_memory_read
-	output [31:0] PC_now; // current PC value Debugging,  
-	output [31:0] Instruction_now; // Fetch stage instruction 
-	output [31:0] Rs_now, Rt_now; // output from Register File 
-	output [31:0] ALU_input_1, ALU_input_2; // ALU inputs
-	output [31:0] PC_4, Beq_address, immi_Shifted; // for Branch Address Debugging
-	output [4:0] Write_Register; // Rd value
-	output [31:0] debug_flag_2, Debug_Write_Data; // ALU_result in MEM stage, Write_Data for Register File
-	output Debug_RegWrite; // RegWrite Op Flag
+	output [31:0] result; // ALU result
+
+	// Debugging Outputs
+	// output [31:0] PC_now; // current PC value Debugging,  
+	// output [31:0] Instruction_now; // Fetch stage instruction 
+	// output [31:0] Rs_now, Rt_now; // output from Register File 
+	// output [31:0] ALU_input_1, ALU_input_2; // ALU inputs
+	// output [31:0] PC_4, Beq_address, immi_Shifted; // for Branch Address Debugging
+	// output [4:0] Write_Register; // Rd value
+	// output [31:0] load_data; // Data_memory_read
+
+	// output [31:0] debug_flag_2, Debug_Write_Data; // ALU_result in MEM stage, Write_Data for Register File
+	// output Debug_RegWrite; // RegWrite Op Flag
 
 	// IF stage
 	wire [31:0] PC_in;
@@ -99,14 +105,15 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	 .PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
 	 .instruction_in(IF_instruction), .instruction_out(ID_instruction));
 	
-	assign PC_now = PC_out;
-	assign Instruction_now = IF_instruction;
+	// assign PC_now = PC_out;
+	// assign Instruction_now = IF_instruction;
 
 	//////////////////////////////////
 	//// Instruction Decode stage ////
 	//////////////////////////////////
-	assign Debug_RegWrite = WB_RegWrite;
-	assign Debug_Write_Data = WB_Write_Data;
+
+	// assign Debug_RegWrite = WB_RegWrite;
+	// assign Debug_Write_Data = WB_Write_Data;
 
 	Register_File regfile_Unit (.clk(clk), .reset(reset),
 	 .Read_Register_1(ID_instruction[25:21]), 
@@ -134,8 +141,8 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	 .sign_extended_immi_in(sign_extended_immi), .sign_extended_immi_out(EX_sign_extended_immi), 
 	 .instruction_in(ID_instruction), .instruction_out(EX_instruction));
 
-	assign Rs_now = Read_data_1;
-	assign Rt_now = Read_data_2;
+	// assign Rs_now = Read_data_1;
+	// assign Rt_now = Read_data_2;
 
 	//////////////////////////////////
 	///////   Execute  stage  ////////
@@ -162,11 +169,11 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	.Read_data_2_in(EX_Read_data_2), .Read_data_2_out(MEM_Read_data_2), 
 	.RegisterRd_in(EX_Write_Register), .RegisterRd_out(MEM_Write_Register));
 
-	assign PC_4 = EX_PC_plus4;
-	assign immi_Shifted = Shifted_immi;
-	assign ALU_input_1 = EX_Read_data_1;
-	assign ALU_input_2 = ALU_input_B;
-	assign Beq_address = Branch_addr;
+	// assign PC_4 = EX_PC_plus4;
+	// assign immi_Shifted = Shifted_immi;
+	// assign ALU_input_1 = EX_Read_data_1;
+	// assign ALU_input_2 = ALU_input_B;
+	// assign Beq_address = Branch_addr;
 	
 	assign result = ALU_result;
 
@@ -178,8 +185,8 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	 .MemRead(MEM_MemRead), .MemWrite(MEM_MemWrite));
 	and (PCSrc, MEM_Branch, MEM_ALU_zero);
 
-	assign debug_flag_2 = MEM_ALU_result;
-	assign load_data = Data_memory_read;
+	// assign debug_flag_2 = MEM_ALU_result;
+	// assign load_data = Data_memory_read;
 
 	MEM_WB_Stage_Reg MEM_WB_Stage_Unit (.clk(clk), .reset(reset),
 	.RegWrite_in(MEM_RegWrite), .RegWrite_out(WB_RegWrite), 
@@ -194,7 +201,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	N_bit_MUX #(32) write_data_mux (.input0(WB_ALU_result), .input1(WB_Data_memory_read), 
 	 .mux_out(WB_Write_Data), .control(WB_MemtoReg));
 
-	assign Write_Register = WB_Write_Register;
+	// assign Write_Register = WB_Write_Register;
 endmodule
 
 // IF/ID stage register
@@ -377,7 +384,7 @@ module Program_Counter (clk, reset, PC_in, PC_out);
 	output reg [31:0] PC_out;
 
 	always @ (posedge clk or posedge reset)	begin
-		if(reset)
+		if (reset)
 			PC_out <= 0;
 		else
 			PC_out <= PC_in;
@@ -440,12 +447,12 @@ module Register_File (Read_Register_1, Read_Register_2,
 	input clk, reset, RegWrite;
 	output reg [31:0] Read_Data_1, Read_Data_2;
 
-	reg [31:0] mem [31:0];
+	reg [31:0] mem [7:0];
 	integer k;
  	
 	always @(posedge clk or posedge reset) begin
 		if (reset) begin
-			for (k = 0; k < 32; k = k + 1) begin
+			for (k = 0; k < 8; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
 			mem[3] = 32'b0011;
