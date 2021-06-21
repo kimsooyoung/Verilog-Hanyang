@@ -24,7 +24,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	load_data, Beq_address, Write_Register,
 	debug_flag_2, Debug_RegWrite, Debug_Write_Data);
 
-	input clk, reset; // clk (5m Hz) feeds clock divider
+	input clk, reset;
 	output [31:0] result, load_data; // ALU result, Data_memory_read
 	output [31:0] PC_now; // current PC value Debugging,  
 	output [31:0] Instruction_now; // Fetch stage instruction 
@@ -85,25 +85,17 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	wire [31:0] WB_Write_Data;
 	wire WB_RegWrite, WB_MemtoReg;
 
-	// SSD display & clock slow-down
-	wire clkSSD, clkNormal, clkRF, clk;
-
-	// clk: 5m Hz
-	// clkSSD: 500 Hz for ring counter
-	// clkNormal: 1 Hz
-	reg clkRF_reg, clk_reg, multi_purpose_RegWrite_reg;
-
 	//////////////////////////////////
 	//// Instruction Fetch stage /////
 	//////////////////////////////////
-	Mux_N_bit #(32) Unit3 (.input0(PC_plus4), .input1(MEM_Branch_addr), 
+	N_bit_MUX #(32) pc_mux (.input0(PC_plus4), .input1(MEM_Branch_addr), 
 	 .mux_out(PC_in), .control(PCSrc));
-	Program_Counter Unit0 (.clk(clk), .reset(reset),
+	Program_Counter program_counter (.clk(clk), .reset(reset),
 	 .PC_in(PC_in), .PC_out(PC_out));
-	Instruction_Memory Unit1 (.address(PC_out),
+	Instruction_Memory instruction_memory (.address(PC_out),
 	 .instruction(IF_instruction), .reset(reset));
-	ALU_add_only Unit2 (.input1(PC_out), .input2(32'b0100), .add_out(PC_plus4));
-	IF_ID_Stage_Reg Unit4 (.clk(clk), .reset(reset),
+	ALU_add_only pc_add_4 (.input1(PC_out), .input2(32'b0100), .add_out(PC_plus4));
+	IF_ID_Stage_Reg IF_ID_Stage_Unit (.clk(clk), .reset(reset),
 	 .PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
 	 .instruction_in(IF_instruction), .instruction_out(ID_instruction));
 	
@@ -116,17 +108,17 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	assign Debug_RegWrite = WB_RegWrite;
 	assign Debug_Write_Data = WB_Write_Data;
 
-	Register_File Unit5 (.clk(clk), .reset(reset),
+	Register_File regfile_Unit (.clk(clk), .reset(reset),
 	 .Read_Register_1(ID_instruction[25:21]), 
 	 .Read_Register_2(ID_instruction[20:16]), 
 	 .Write_Register(WB_Write_Register), .Write_Data(WB_Write_Data),
 	 .Read_Data_1(Read_data_1), .Read_Data_2(Read_data_2), .RegWrite(WB_RegWrite));
-	Sign_Extension Unit6 (.sign_in(ID_instruction[15:0]), .sign_out(sign_extended_immi));
-	Control Unit8 (.OpCode(ID_instruction[31:26]),
+	Sign_Extension immi_sign_extension (.input_16(ID_instruction[15:0]), .output_32(sign_extended_immi));
+	Control control_unit (.OpCode(ID_instruction[31:26]),
 	 .RegDst(RegDst), .Jump(Jump), .Branch(Branch), 
 	 .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), 
 	 .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite));
-	ID_EX_Stage_Reg Unit9 (.clk(clk), .reset(reset),
+	ID_EX_Stage_Reg ID_EX_Stage_Unit (.clk(clk), .reset(reset),
 	 .RegWrite_in(RegWrite), .RegWrite_out(EX_RegWrite),
 	 .MemtoReg_in(MemtoReg), .MemtoReg_out(EX_MemtoReg),
 	 .Branch_in(Branch), .Branch_out(EX_Branch),
@@ -148,16 +140,16 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	//////////////////////////////////
 	///////   Execute  stage  ////////
 	//////////////////////////////////
-	Mux_N_bit #(5) Unit10 (.input0(EX_instruction[20:16]), .input1(EX_instruction[15:11]), 
+	N_bit_MUX #(5) write_reg_mux (.input0(EX_instruction[20:16]), .input1(EX_instruction[15:11]), 
 	 .mux_out(EX_Write_Register), .control(EX_RegDst));
-	ALUControl Unit11 (.ALUOp(EX_ALUOp), .funct(EX_instruction[5:0]), .operation_code(operation_code));
-	Mux_N_bit #(32) Unit14 (.input0(EX_Read_data_2), .input1(EX_sign_extended_immi), 
+	ALU_Control alu_control_unit (.ALUOp(EX_ALUOp), .f_code(EX_instruction[5:0]), .operation_code(operation_code));
+	N_bit_MUX #(32) alu_input_mux (.input0(EX_Read_data_2), .input1(EX_sign_extended_immi), 
 	 .mux_out(ALU_input_B), .control(EX_ALUSrc));
-	ALU Unit15 (.input1(EX_Read_data_1), .input2(ALU_input_B), 
+	ALU alu_unit (.input1(EX_Read_data_1), .input2(ALU_input_B), 
 	 .alu_out(ALU_result), .zero(ALU_zero), .control(operation_code));	
 	assign Shifted_immi = { EX_sign_extended_immi[29:0], 2'b00 };
-	ALU_add_only Unit17 (.input1(EX_PC_plus4), .input2(Shifted_immi), .add_out(Branch_addr)); 
-	EX_MEM_Stage_Reg Unit18 ( .clk(clk), .reset(reset),
+	ALU_add_only alu_add_only_unit (.input1(EX_PC_plus4), .input2(Shifted_immi), .add_out(Branch_addr)); 
+	EX_MEM_Stage_Reg EX_MEM_Stage_Unit ( .clk(clk), .reset(reset),
 	.RegWrite_in(EX_RegWrite), .RegWrite_out(MEM_RegWrite),
 	.MemtoReg_in(EX_MemtoReg), .MemtoReg_out(MEM_MemtoReg),
 	.Branch_in(EX_Branch), .Branch_out(MEM_Branch),
@@ -181,7 +173,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	//////////////////////////////////
 	///////   Memory  stage  /////////
 	//////////////////////////////////
-	Data_Memory Unit19 (.clk(clk), .reset(reset), .MemAddr(MEM_ALU_result[7:0]), 
+	Data_Memory data_memory_unit (.clk(clk), .reset(reset), .MemAddr(MEM_ALU_result[7:0]), 
 	 .Write_Data(MEM_Read_data_2), .Read_Data(Data_memory_read), 
 	 .MemRead(MEM_MemRead), .MemWrite(MEM_MemWrite));
 	and (PCSrc, MEM_Branch, MEM_ALU_zero);
@@ -189,7 +181,7 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	assign debug_flag_2 = MEM_ALU_result;
 	assign load_data = Data_memory_read;
 
-	MEM_WB_Stage_Reg Unit21 (.clk(clk), .reset(reset),
+	MEM_WB_Stage_Reg MEM_WB_Stage_Unit (.clk(clk), .reset(reset),
 	.RegWrite_in(MEM_RegWrite), .RegWrite_out(WB_RegWrite), 
 	.MemtoReg_in(MEM_MemtoReg), .MemtoReg_out(WB_MemtoReg), 
 	.Data_memory_read_in(Data_memory_read), .Data_memory_read_out(WB_Data_memory_read), 
@@ -199,11 +191,10 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	//////////////////////////////////
 	///   Write Back stage      //////
 	//////////////////////////////////
-	Mux_N_bit #(32) Unit22 (.input0(WB_ALU_result), .input1(WB_Data_memory_read), 
+	N_bit_MUX #(32) write_data_mux (.input0(WB_ALU_result), .input1(WB_Data_memory_read), 
 	 .mux_out(WB_Write_Data), .control(WB_MemtoReg));
 
 	assign Write_Register = WB_Write_Register;
-
 endmodule
 
 // IF/ID stage register
@@ -213,10 +204,10 @@ module IF_ID_Stage_Reg (clk, reset, PC_plus4_in, PC_plus4_out,
 	input clk, reset;
 	input [31:0] PC_plus4_in, instruction_in;
 
-	output [31:0] PC_plus4_out, instruction_out;
-	reg [31:0] PC_plus4_out, instruction_out;
+	output reg [31:0] PC_plus4_out, instruction_out;
 
 	always @(posedge clk or posedge reset) begin
+
 		if (reset) begin
 			PC_plus4_out <= 32'b0;
 			instruction_out <= 32'b0;
@@ -242,69 +233,50 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 
 	// WB control signal
 	input RegWrite_in, MemtoReg_in;
-	output RegWrite_out, MemtoReg_out;
+	output reg RegWrite_out, MemtoReg_out;
 	// MEM control signal
 	input Branch_in, MemRead_in, MemWrite_in, Jump_in;
-	output Branch_out, MemRead_out, MemWrite_out, Jump_out;
+	output reg Branch_out, MemRead_out, MemWrite_out, Jump_out;
 	// EX control signal
 	input RegDst_in, ALUSrc_in;
+	output reg RegDst_out, ALUSrc_out;
 	input [1:0] ALUOp_in;
-	output RegDst_out, ALUSrc_out;
-	output [1:0] ALUOp_out;
+	output reg [1:0] ALUOp_out;
 	// addr content
 	input [31:0] PC_plus4_in;
-	output [31:0] PC_plus4_out;
+	output reg [31:0] PC_plus4_out;
 	// data content
 	input [31:0] read_data_1_in, read_data_2_in, sign_extended_immi_in;
-	output [31:0] read_data_1_out, read_data_2_out, sign_extended_immi_out;
+	output reg [31:0] read_data_1_out, read_data_2_out, sign_extended_immi_out;
 	// reg content
 	input [31:0] instruction_in;
-	output [31:0] instruction_out;
-
+	output reg [31:0] instruction_out;
 	// general signal
-	// reset: async; set all register content to 0
 	input clk, reset;
 	
-	reg RegWrite_out, MemtoReg_out;
-	reg Branch_out, MemRead_out, MemWrite_out, Jump_out;
-	reg RegDst_out, ALUSrc_out;
-	reg [1:0] ALUOp_out;
-	reg [31:0] instruction_out;
-	reg [31:0] PC_plus4_out;
-	reg [31:0] read_data_1_out, read_data_2_out, sign_extended_immi_out;
-	
 	always @(posedge clk or posedge reset) begin
-		if (reset == 1'b1) begin
-			RegWrite_out = 1'b0;
-			MemtoReg_out = 1'b0;
-			Branch_out = 1'b0;
-			MemRead_out = 1'b0;
-			MemWrite_out = 1'b0;
-			Jump_out = 1'b0;
-			RegDst_out = 1'b0;
-			ALUSrc_out = 1'b0;
+		if (reset) begin
+			RegWrite_out = 1'b0; MemtoReg_out = 1'b0;
+			Branch_out = 1'b0; MemRead_out = 1'b0;
+			MemWrite_out = 1'b0; Jump_out = 1'b0;
+			RegDst_out = 1'b0; ALUSrc_out = 1'b0;
 			ALUOp_out = 2'b0;
-			PC_plus4_out = 32'b0;
-			read_data_1_out = 32'b0;
-			read_data_2_out = 32'b0;
+
+			PC_plus4_out = 32'b0; 
+			read_data_1_out = 32'b0; read_data_2_out = 32'b0; 
 			sign_extended_immi_out = 32'b0;
 			instruction_out = 32'b0;	
 		end
 
 		else begin
-			RegWrite_out = RegWrite_in;
-			MemtoReg_out = MemtoReg_in;
-			Branch_out = Branch_in;
-			MemRead_out = MemRead_in;
-			MemWrite_out = MemWrite_in;
-			Jump_out = Jump_in;
-			RegDst_out = RegDst_in;
-			ALUSrc_out = ALUSrc_in;
-			ALUOp_out = ALUOp_in;
-			PC_plus4_out = PC_plus4_in;
-			read_data_1_out = read_data_1_in;
-			read_data_2_out = read_data_2_in;
+			RegWrite_out = RegWrite_in; MemtoReg_out = MemtoReg_in;
+			Branch_out = Branch_in; MemRead_out = MemRead_in;
+			MemWrite_out = MemWrite_in; Jump_out = Jump_in;
+			RegDst_out = RegDst_in; ALUSrc_out = ALUSrc_in;
+			ALUOp_out = ALUOp_in; PC_plus4_out = PC_plus4_in;
 			sign_extended_immi_out = sign_extended_immi_in;
+			read_data_1_out = read_data_1_in; 
+			read_data_2_out = read_data_2_in;
 			instruction_out = instruction_in;
 		end	
 	end	
@@ -321,58 +293,41 @@ module EX_MEM_Stage_Reg (clk, reset,
 
 	// WB control signal
 	input RegWrite_in, MemtoReg_in;
-	output RegWrite_out, MemtoReg_out;
+	output reg RegWrite_out, MemtoReg_out;
 	// MEM control signal
 	input Branch_in, MemRead_in, MemWrite_in, Jump_in;
-	output Branch_out, MemRead_out, MemWrite_out, Jump_out;
+	output reg Branch_out, MemRead_out, MemWrite_out, Jump_out;
 	// addr content
 	input [31:0] Branch_addr_in;
-	output [31:0] Branch_addr_out;
+	output reg [31:0] Branch_addr_out;
 	// data content
 	input ALU_zero_in;
-	output ALU_zero_out;
+	output reg ALU_zero_out;
+	// results
 	input [31:0] ALU_result_in, Read_data_2_in;
-	output [31:0] ALU_result_out, Read_data_2_out;
+	output reg [31:0] ALU_result_out, Read_data_2_out;
+	// registers
 	input [4:0] RegisterRd_in;
-	output [4:0] RegisterRd_out;
-
+	output reg [4:0] RegisterRd_out;
 	// general signal
-	// reset: async; set all register content to 0
 	input clk, reset;
 
-	reg RegWrite_out, MemtoReg_out;
-	reg Branch_out, MemRead_out, MemWrite_out, Jump_out;
-	reg [31:0] Branch_addr_out;
-	reg ALU_zero_out;
-	reg [31:0] ALU_result_out, Read_data_2_out;
-	reg [4:0] RegisterRd_out;
-
 	always @(posedge clk or posedge reset) begin
-		if (reset == 1'b1) begin
-		  RegWrite_out <= 1'b0;
-		  MemtoReg_out <= 1'b0;
-		  Branch_out <= 1'b0;
-		  MemRead_out <= 1'b0;
-		  MemWrite_out <= 1'b0;
-		  Jump_out <= 1'b0;
-		  Branch_addr_out <= 32'b0;
-		  ALU_zero_out <= 1'b0;
-		  ALU_result_out <= 32'b0;
-		  Read_data_2_out <= 32'b0;
+		if (reset) begin
+		  RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
+		  Branch_out <= 1'b0; MemRead_out <= 1'b0;
+		  MemWrite_out <= 1'b0; Jump_out <= 1'b0;
+		  Branch_addr_out <= 32'b0; ALU_zero_out <= 1'b0;
+		  ALU_result_out <= 32'b0; Read_data_2_out <= 32'b0;
 		  RegisterRd_out <= 5'b0; 
 		end
 
 		else begin
-		  RegWrite_out <= RegWrite_in;
-		  MemtoReg_out <= MemtoReg_in;
-		  Branch_out <= Branch_in;
-		  MemRead_out <= MemRead_in;
-		  MemWrite_out <= MemWrite_in;
-		  Jump_out <= Jump_in;
-		  Branch_addr_out <= Branch_addr_in;
-		  ALU_zero_out <= ALU_zero_in;
-		  ALU_result_out <= ALU_result_in;
-		  Read_data_2_out <= Read_data_2_in;
+		  RegWrite_out <= RegWrite_in; MemtoReg_out <= MemtoReg_in;
+		  Branch_out <= Branch_in; MemRead_out <= MemRead_in;
+		  MemWrite_out <= MemWrite_in; Jump_out <= Jump_in;
+		  Branch_addr_out <= Branch_addr_in; ALU_zero_out <= ALU_zero_in;
+		  ALU_result_out <= ALU_result_in; Read_data_2_out <= Read_data_2_in;
 		  RegisterRd_out <= RegisterRd_in;
 		end
 
@@ -389,34 +344,25 @@ module MEM_WB_Stage_Reg (RegWrite_in, RegWrite_out,
 	
 	// WB control signal
 	input RegWrite_in, MemtoReg_in;
-	output RegWrite_out, MemtoReg_out;
+	output reg RegWrite_out, MemtoReg_out;
 	// data content
 	input [31:0] Data_memory_read_in, ALU_result_in;
-	output [31:0] Data_memory_read_out, ALU_result_out;
+	output reg [31:0] Data_memory_read_out, ALU_result_out;
 	input [4:0] Write_Register_in;
-	output [4:0] Write_Register_out;
-
+	output reg [4:0] Write_Register_out;
+	// general signal
 	input clk, reset;
 	
-	reg RegWrite_out, MemtoReg_out;
-	reg [31:0] Data_memory_read_out, ALU_result_out;
-	reg [4:0] Write_Register_out;
-	
 	always @(posedge clk or posedge reset) begin
-
 		if (reset) begin
-			RegWrite_out <= 1'b0;
-			MemtoReg_out <= 1'b0;
-			Data_memory_read_out <= 32'b0;
-			ALU_result_out <= 32'b0;
+			RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
+			Data_memory_read_out <= 32'b0;  ALU_result_out <= 32'b0;
 			Write_Register_out <= 5'b0;
 		end
 
 		else begin
-			RegWrite_out <= RegWrite_in;
-			MemtoReg_out <= MemtoReg_in;
-			Data_memory_read_out <= Data_memory_read_in;
-			ALU_result_out <= ALU_result_in;
+			RegWrite_out <= RegWrite_in; MemtoReg_out <= MemtoReg_in;
+			Data_memory_read_out <= Data_memory_read_in; ALU_result_out <= ALU_result_in;
 			Write_Register_out <= Write_Register_in;
 		end
 	end
@@ -424,44 +370,36 @@ endmodule
 
 // PC
 module Program_Counter (clk, reset, PC_in, PC_out);
+
 	input clk, reset;
 	input [31:0] PC_in;
 
-	output [31:0] PC_out;
-	reg [31:0] PC_out;
+	output reg [31:0] PC_out;
 
-	always @ (posedge clk or posedge reset)
-	begin
+	always @ (posedge clk or posedge reset)	begin
 		if(reset)
-			PC_out<=0;
+			PC_out <= 0;
 		else
-			PC_out<=PC_in;
+			PC_out <= PC_in;
 	end
 endmodule
 
-
-//////////////////////////////////////////////////////////////////////////
-// modules that are direct copies from single cycle implementation    ////
-//////////////////////////////////////////////////////////////////////////
-// async read I-MEM
-// height: 64, width: 32 bits (as required by TA)
-// PC input width: 64 = 2^6
-// instruction output width: 32 bits (== I-MEM width)
-// async reset: as specified in document "Project Two Specification (V3)", 
-// 		  		first reset all to 0, then hard-code instructions
+// contains hard-code instructions
 module Instruction_Memory (address, instruction, reset);
 	input reset;
 	input [31:0] address;
 	output [31:0] instruction;
-	reg [31:0] mem [7:0]; // 8 instruction
+
+	reg [31:0] mem [7:0]; // 8 instructions
 	integer k;
 	
-	assign instruction = mem[address[6:2]]; // 8 instructions
+	// get instruction right away
+	assign instruction = mem[address[6:2]];
 
 	// Initial setup at reset posedge
 	always @(posedge reset) begin
 		for (k = 0; k < 8; k = k + 1) begin
-			mem[k] = 32'b0; // reset instruction memory
+			mem[k] = 32'b0; // add $0 $0 $0
 		end
 
 		mem[0] = 32'b000000_00011_00100_00010_00000_100000; // add $2, $3, $4
@@ -472,39 +410,27 @@ module Instruction_Memory (address, instruction, reset);
 endmodule
 
 // 32-bit ALU for addition only
-// data input width: 2 32-bit
-// data output width: 1 32-bit, no "zero" output
-// control: no control input, only addition operation implemeneted
-// as specified in Fig 4.12
-// attached in email as "Fig 4_12 ALU Control Input"
 module ALU_add_only (input1, input2, add_out);
 	input [31:0] input1, input2;
 	output [31:0] add_out;
+
 	assign add_out=input1+input2;
 endmodule
 
-// N-bit 2-to-1 Mux
-// input: 2 N-bit input
-// output: 1 N-bit output
-// control: 1 bit
-// possible value of N in single cycle: 5, 6, 32
-module Mux_N_bit (input0, input1, mux_out, control);
+// N_bit_MUX for Usability
+module N_bit_MUX (input0, input1, mux_out, control);
 	parameter N = 32;
 	
 	input [N-1:0] input0, input1;
 	input control;
-	
 	output [N-1:0] mux_out;
 
 	assign mux_out = control ? input1 : input0;
 endmodule
 
 // sync register file (write/read occupy half cycle each)
-// height: 32 (from $0 to $ra), width: 32 bits
 // write: on rising edge; data width 32 bit; address width 5 bit
 // read: on falling edge; data width 32 bit; address width 5 bit
-// control: write on rising edge if (RegWrite == 1)
-// async reset: set all register content to 0
 module Register_File (Read_Register_1, Read_Register_2, 
 	Write_Register, Write_Data, Read_Data_1, Read_Data_2, 
 	RegWrite, clk, reset);
@@ -512,15 +438,13 @@ module Register_File (Read_Register_1, Read_Register_2,
 	input [4:0] Read_Register_1, Read_Register_2, Write_Register;
 	input [31:0] Write_Data;
 	input clk, reset, RegWrite;
-	output [31:0] Read_Data_1, Read_Data_2;
+	output reg [31:0] Read_Data_1, Read_Data_2;
 
 	reg [31:0] mem [31:0];
-	reg [31:0] Read_Data_1, Read_Data_2;
 	integer k;
  	
-	// Ou combines the block of reset into the block of posedge clk
 	always @(posedge clk or posedge reset) begin
-		if (reset == 1'b1) begin
+		if (reset) begin
 			for (k = 0; k < 32; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
@@ -529,7 +453,8 @@ module Register_File (Read_Register_1, Read_Register_2,
 			mem[6] = 32'h0000_0040;
 		end
 		
-		else if (RegWrite == 1'b1) mem[Write_Register] = Write_Data; 
+		else if (RegWrite)
+			mem[Write_Register] = Write_Data; 
 	end
 
 	always @(negedge clk) begin
@@ -539,34 +464,19 @@ module Register_File (Read_Register_1, Read_Register_2,
 endmodule
 
 // sign-extend the 16-bit input to the 32_bit output
-module Sign_Extension (sign_in, sign_out);
-	input [15:0] sign_in;
-	output [31:0] sign_out;
-	assign sign_out[15:0]=sign_in[15:0];
-	assign sign_out[31:16]=sign_in[15]?16'b1111_1111_1111_1111:16'b0;
+module Sign_Extension (input_16, output_32);
+	input [15:0] input_16;
+	output [31:0] output_32;
+	
+	assign output_32[15:0]  = input_16[15:0];
+	assign output_32[31:16] = input_16[15] ? 16'b1111_1111_1111_1111: 16'b0;
 endmodule
 
-// shift-left-2 for jump instruction
-// input width: 26 bits
-// output width: 28 bits
-// fill the void with 0 after shifting
-// we don't need to shift in this case, becasue the address of the instructions
-// are addressed by words
-module Shift_Left_2_Jump (shift_in, shift_out);
-	input [25:0] shift_in;
-	output [27:0] shift_out;
-	assign shift_out[27:0]={shift_in[25:0],2'b00};
-endmodule
-
-// async control signal generation unit based on OpCode
-// as specified in Fig 4.22
-// attached in email as file "Fig 4_22 Single Cycle Control"
-// input: 6 bits OpCode
-// output: all 1 bit except ALUOp which is 2-bits wide
+// Control Path
 module Control (OpCode, RegDst, Jump, Branch, MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, RegWrite);
 	input [5:0] OpCode;
-	output RegDst, Jump, Branch, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite;
 	output [1:0] ALUOp;
+	output RegDst, Jump, Branch, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite;
 
 	// 000000 : add, sub, and, or, slt
 	// 001000 : addi 
@@ -598,17 +508,11 @@ module Control (OpCode, RegDst, Jump, Branch, MemRead, MemtoReg, ALUOp, MemWrite
 						 ((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]));
 	// 000010 (j)
 	assign Jump=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(~OpCode[0]);
-	
 endmodule
 
-// async control to generate ALU input signal
-// as specified in Fig 4.12
-// attached in email as file "Fig 4_12 ALU Control Input"
-// input: 2-bit ALUOp control signal and 6-bit funct field from instruction
-// output: 4-bit ALU control input
-module ALUControl (ALUOp, funct, operation_code);
+module ALU_Control (ALUOp, f_code, operation_code);
 	input [1:0] ALUOp;
-	input [5:0] funct;
+	input [5:0] f_code;
 	output [3:0] operation_code;
 	
 	assign operation_code[3]=0;
@@ -616,8 +520,8 @@ module ALUControl (ALUOp, funct, operation_code);
 	// 1  0   | x x 0 0 1 0 => R-type subtract
 	// 1  0   | x x 1 0 1 0 => R-type slt
 	assign operation_code[2]=((~ALUOp[1])&(ALUOp[0])) |
-						((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(funct[1])&(~funct[0])) |
-						((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));
+						((ALUOp[1])&(~ALUOp[0])&(~f_code[3])&(~f_code[2])&(f_code[1])&(~f_code[0])) |
+						((ALUOp[1])&(~ALUOp[0])&(f_code[3])&(~f_code[2])&(f_code[1])&(~f_code[0]));
 	// 0  0   | x x x x x x lw or sw => add	
 	// 0  1   | x x x x x x branch => subtract
 	// 1  0   | x x 0 0 0 0 => R-type add 
@@ -625,82 +529,73 @@ module ALUControl (ALUOp, funct, operation_code);
 	// 1  0   | x x 1 0 1 0 => R-type slt
 	assign operation_code[1]=((~ALUOp[1])&(~ALUOp[0])) |
 							   ((~ALUOp[1])&(ALUOp[0]))  |
-								((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(~funct[1])&(~funct[0])) |
-								((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(~funct[2])&(funct[1])&(~funct[0]))  | 
-								((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));
-	// ALU OP | funct field
+								((ALUOp[1])&(~ALUOp[0])&(~f_code[3])&(~f_code[2])&(~f_code[1])&(~f_code[0])) |
+								((ALUOp[1])&(~ALUOp[0])&(~f_code[3])&(~f_code[2])&(f_code[1])&(~f_code[0]))  | 
+								((ALUOp[1])&(~ALUOp[0])&(f_code[3])&(~f_code[2])&(f_code[1])&(~f_code[0]));
+	// ALU OP | f_code field
 	// 1  0   | x x 0 1 0 1 => R-type Or 
 	// 1  0   | x x 1 0 1 0 => R-type slt
-	assign operation_code[0]=((ALUOp[1])&(~ALUOp[0])&(~funct[3])&(funct[2])&(~funct[1])&(funct[0])) | 
-								((ALUOp[1])&(~ALUOp[0])&(funct[3])&(~funct[2])&(funct[1])&(~funct[0]));	
+	assign operation_code[0]=((ALUOp[1])&(~ALUOp[0])&(~f_code[3])&(f_code[2])&(~f_code[1])&(f_code[0])) | 
+								((ALUOp[1])&(~ALUOp[0])&(f_code[3])&(~f_code[2])&(f_code[1])&(~f_code[0]));	
 
 endmodule
 
 // 32-bit ALU
-// data input width: 2 32-bit
-// data output width: 1 32-bit and one "zero" output
-// control: 4-bit
-// zero: output 1 if all bits of data output is 0
-// as specified in Fig 4.12
-// attached in email as "Fig 4_12 ALU Control Input"
 module ALU (input1, input2, alu_out, zero, control);
 	// TODO : negative number handling
 	input [31:0] input1, input2;
-	output [31:0] alu_out;
-	output zero;
-	reg zero;
-	reg [31:0] alu_out;
 	input [3:0] control;
+
+	output reg [31:0] alu_out;
+	output reg zero;
+
 	always @ (control or input1 or input2) begin
 		case (control)
-		// and
-		4'b0000: begin alu_out<=input1&input2; zero<=0; end
-		// or
-		4'b0001: begin alu_out<=input1|input2; zero<=0; end
-		// add
-		4'b0010: begin alu_out<=input1+input2; zero<=0; end
-		// subtract
-		4'b0110: begin 
-			if(input1==input2) 
-			    zero<=1; 
-			else 
-			    zero<=0; 
-				alu_out<=input1-input2; 
-			end
-		// slt 
-		4'b0111: begin 
-			zero<=0; 
-			if(input1-input2>=32'h8000_0000) 
-				alu_out<=32'b1; 
-			else
-				alu_out<=32'b0; 
-			end
-		default: begin alu_out<=input1; zero<=0; end
+			// and
+			4'b0000: begin alu_out<=input1&input2; zero<=0; end
+			// or
+			4'b0001: begin alu_out<=input1|input2; zero<=0; end
+			// add
+			4'b0010: begin alu_out<=input1+input2; zero<=0; end
+			// subtract
+			4'b0110: begin 
+				if(input1 == input2) 
+					zero <= 1; 
+				else 
+					zero <= 0; 
+					alu_out <= input1 - input2; 
+				end
+			// slt 
+			4'b0111: begin 
+				zero <= 0; 
+				if(input1 - input2 >= 32'h8000_0000) 
+					alu_out <= 32'b1; 
+				else
+					alu_out <= 32'b0; 
+				end
+		default: begin 
+			zero <= 0; 
+			alu_out <= input1;
+		end
 		endcase
 	end
 endmodule
 
-// rising edge sync-write, async-read D-MEM
-// height: 64, width: 32 bits (from document "Project Two Specification (V3)")
-// address input: 6 bits (64 == 2^6)
-// data input/output: 32 bits
-// write: on rising edge, when (MemWrite == 1)
-// read: asynchronous, when (MemRead == 1)
+// Referred Previous Memory Project 
 module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrite);
 	input clk, reset;
-	input [7:0] MemAddr;
 	input MemRead, MemWrite;
-	input [31:0] Write_Data;
-	output [31:0] Read_Data;
-	reg [31:0] Read_Data;
 
-	// assign Read_Data = (MemRead) ? mem[MemAddr[7:2]] : 32'bx;
-	
+	input [7:0] MemAddr;
+	input [31:0] Write_Data;
+
+	output reg [31:0] Read_Data;
+
 	reg [31:0] mem [63:0];
 	integer k;
 
 	always @(*) begin
-		if (reset == 1'b1) begin
+		if (reset) begin
 			for (k = 0; k < 64; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
