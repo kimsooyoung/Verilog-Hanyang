@@ -213,9 +213,9 @@ module IF_ID_Stage_Reg (clk, reset, PC_plus4_in, PC_plus4_out,
 
 	output reg [31:0] PC_plus4_out, instruction_out;
 
-	always @(posedge clk or posedge reset) begin
+	always @(posedge clk or negedge reset) begin
 
-		if (reset) begin
+		if (!reset) begin
 			PC_plus4_out <= 32'b0;
 			instruction_out <= 32'b0;
 		end
@@ -261,8 +261,8 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 	// general signal
 	input clk, reset;
 	
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 			RegWrite_out = 1'b0; MemtoReg_out = 1'b0;
 			Branch_out = 1'b0; MemRead_out = 1'b0;
 			MemWrite_out = 1'b0; Jump_out = 1'b0;
@@ -319,8 +319,8 @@ module EX_MEM_Stage_Reg (clk, reset,
 	// general signal
 	input clk, reset;
 
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 		  RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
 		  Branch_out <= 1'b0; MemRead_out <= 1'b0;
 		  MemWrite_out <= 1'b0; Jump_out <= 1'b0;
@@ -360,8 +360,8 @@ module MEM_WB_Stage_Reg (RegWrite_in, RegWrite_out,
 	// general signal
 	input clk, reset;
 	
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 			RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
 			Data_memory_read_out <= 32'b0;  ALU_result_out <= 32'b0;
 			Write_Register_out <= 5'b0;
@@ -383,8 +383,8 @@ module Program_Counter (clk, reset, PC_in, PC_out);
 
 	output reg [31:0] PC_out;
 
-	always @ (posedge clk or posedge reset)	begin
-		if (reset)
+	always @ (posedge clk or negedge reset)	begin
+		if (!reset)
 			PC_out <= 0;
 		else
 			PC_out <= PC_in;
@@ -404,7 +404,7 @@ module Instruction_Memory (address, instruction, reset);
 	assign instruction = mem[address[6:2]];
 
 	// Initial setup at reset posedge
-	always @(posedge reset) begin
+	always @(negedge reset) begin
 		for (k = 0; k < 8; k = k + 1) begin
 			mem[k] = 32'b0; // add $0 $0 $0
 		end
@@ -450,8 +450,8 @@ module Register_File (Read_Register_1, Read_Register_2,
 	reg [31:0] mem [7:0];
 	integer k;
  	
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 			for (k = 0; k < 8; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
@@ -602,7 +602,7 @@ module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrit
 	integer k;
 
 	always @(*) begin
-		if (reset) begin
+		if (!reset) begin
 			for (k = 0; k < 64; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
