@@ -24,7 +24,6 @@ module basic_pipeline (clk, reset, result, PC_now, Instruction_now,
 	load_data, Beq_address, Write_Register,
 	debug_flag_2, Debug_RegWrite, Debug_Write_Data);
 
-
 	input clk, reset; // clk (5m Hz) feeds clock divider
 	output [31:0] result, load_data; // ALU result, Data_memory_read
 	output [31:0] PC_now; // current PC value Debugging,  
