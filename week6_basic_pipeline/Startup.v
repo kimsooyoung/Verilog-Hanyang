@@ -63,34 +63,51 @@ module Startup(
 	reg [24:0]cnt =0;
 	reg reset_new = 1'b1;
 	reg [2:0]reset_cnt = 0;
-
-   reg [15:0] test_led = 0;
+	
+	reg [15:0] test_led = 0;
+	wire clk_slow;
 	reg clk_operating;
 	wire [31:0] ALU_Result;
-	
-	basic_pipeline my_pipeline(.clk(clk_50MHz), .reset(reset), .result(ALU_Result));
+
+
+	assign clk_slow = clk_operating;
+	basic_pipeline my_pipeline(.clk(clk_slow), .reset(reset), .result(ALU_Result));
 	
 	//Counter
-	always @(posedge clk_50MHz or negedge reset)
-		if(!reset)
+	always @(posedge clk_50MHz or negedge reset) begin
+		if(!reset) begin
 			counter<=0;
-		else
+			clk_operating <= 1'b0;
+		end
+
+		else begin
 			counter<=counter+1;
+			clk_operating <= ((counter[3:0] == 4'b1111) ? ~clk_operating: clk_operating );
+		end
+	end
 
 	
-	//Led
-	always @(posedge counter[24] or negedge reset) begin
-	//always @(posedge clk_50MHz or negedge reset) begin
+	// // Test Led
+	// always @(posedge counter[24] or negedge reset) begin
+	// 	if (!reset) begin
+	// 		led <= 16'b0;
+	// 	end
+
+	// 	else begin
+	// 		// 7 9 10 ... 23
+    //     	led<= ~test_led;
+	// 		test_led <= ~test_led;
+	// 	end
+	// end
+
+	// SLOW Led
+	always @(posedge clk_50MHz or negedge reset) begin
 		if (!reset) begin
 			led <= 16'b0;
 		end
 
 		else begin
-			// 7 9 10 ... 23
-			// led<= ALU_Result[15:0];
-        	led<= ~test_led;
-			test_led <= ~test_led;
-			// led <= 16'b1111_1111_1111_1111;
+			led<= ALU_Result[15:0];
 		end
 	end
 	
