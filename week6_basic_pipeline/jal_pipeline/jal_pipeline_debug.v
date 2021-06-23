@@ -59,6 +59,7 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	wire [31:0] Read_data_1, Read_data_2;
 	wire [31:0] sign_extended_immi;
 	wire [31:0] Jump_Address;
+	wire [31:0] JR_Address;
 	wire [31:0] ID_Shifted_immi;
 	wire [31:0] ID_Branch_addr;
 	wire ALUSrc, RegWrite;
@@ -67,6 +68,7 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	wire RegDst_t, Jump_t, Branch_t;
 	wire MemRead_t, MemtoReg_t, MemWrite_t;
 	wire IF_Flush, ID_Flush, EX_Flush;
+	wire Jump_Register;
 	wire Rs_Rt_equal;
 	wire [1:0] ALUOp;
 	wire Hazard, Control_Reset;
@@ -125,7 +127,9 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	N_bit_MUX #(32) branch_mux (.input0(PC_plus4), .input1(ID_Branch_addr), 
 	 .mux_out(Branch_MUX_output), .control(Branch_taken));
 	N_bit_MUX #(32) jump_mux (.input0(Branch_MUX_output), .input1(Jump_Address), 
-	 .mux_out(PC_in), .control(Jump));
+	 .mux_out(Jump_MUX_output), .control(Jump));
+	N_bit_MUX #(32) jr_mux (.input0(Jump_MUX_output), .input1(JR_Address), 
+	 .mux_out(PC_in), .control(Jump_Register));
 	
 	IF_ID_Stage_Reg IF_ID_Stage_Unit (.clk(clk), .reset(reset),
 	 .IF_ID_Write(IF_ID_Write), .IF_Flush(IF_Flush),
@@ -150,6 +154,7 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	 .RegWrite(WB_RegWrite));
 	assign Rs_Rt_equal = (Read_data_1 == Read_data_2)?1:0;
 	assign Jump_Address = {ID_PC_plus4[31:28], ID_instruction[25:0], 2'b00}; 
+	assign JR_Address = Read_data_1;
 	Sign_Extension immi_sign_extension (.input_16(ID_instruction[15:0]), .output_32(sign_extended_immi));
 	assign ID_Shifted_immi = { sign_extended_immi[29:0], 2'b00 };
 	ALU_add_only alu_add_only_unit (.input1(ID_PC_plus4), 
@@ -166,7 +171,8 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	 .RegDst(RegDst), .Jump(Jump), .Branch(Branch), 
 	 .MemRead(MemRead), .MemtoReg(MemtoReg), .ALUOp(ALUOp), 
 	 .MemWrite(MemWrite), .ALUSrc(ALUSrc), .RegWrite(RegWrite),
-	 .IF_Flush(IF_Flush), .ID_Flush(ID_Flush), .EX_Flush(EX_Flush));
+	 .IF_Flush(IF_Flush), .ID_Flush(ID_Flush), .EX_Flush(EX_Flush),
+	 .Jump_Register(Jump_Register));
 	
 	or (Control_Reset, ID_Flush, Hazard);
 	Reset_Control reset_control_unit(
@@ -546,12 +552,13 @@ module Register_File (Read_Register_1, Read_Register_2,
 			for (k = 0; k < 32; k = k + 1) begin
 				mem[k] <= 32'b0;
 			end
-			mem[1] <= 20;
-			mem[2] <= 8;
-			mem[5] <= 2;
-			mem[6] <= 0;
-			mem[7] <= 1;
-			mem[9] <= 3;
+			mem[4] <= 9;
+			mem[5] <= 8;
+			mem[6] <= 7;
+			mem[7] <= 6;
+			
+			mem[2] <= 0;
+			mem[31] <= 0;
 			// mem[3] = 32'b0011;
 			// mem[4] = 32'b0011;
 			// mem[6] = 32'h0000_0040;
@@ -580,13 +587,16 @@ endmodule
 
 // Control Path
 module Control (OpCode, RegDst,  MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, RegWrite,
-	Jump, Branch, IF_Flush, ID_Flush, EX_Flush);
+	Jump, Branch, IF_Flush, ID_Flush, EX_Flush,
+	Jump_Register);
 
 	input [5:0] OpCode;
 	output [1:0] ALUOp;
 	output RegDst, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite;
 	output Jump, Branch;
 	output IF_Flush, ID_Flush, EX_Flush;
+	output Jump_Register;
+
 	// 000000 : add, sub, and, or, slt
 	// 001000 : addi 
 	// 100011 : lw
@@ -615,13 +625,14 @@ module Control (OpCode, RegDst,  MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, Reg
 	assign RegWrite=((~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]))|
  	                ((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0])) |
 						 ((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]));
-
 	// 000100 (beq)
 	assign Branch=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]);
 	// 000010 (j), 000011 : jal, 000111 : jr
 	assign Jump=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(~OpCode[0])| 
 				(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]) | 
 				(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(OpCode[1])&(OpCode[0]);
+	// 000111 : jr
+	assign Jump_Register=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(OpCode[1])&(OpCode[0]);
 
 	// 000010 (j), 000011 : jal, 000111 : jr
 	assign IF_Flush=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(~OpCode[0])| 
@@ -729,10 +740,8 @@ module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrit
 			for (k = 0; k < 64; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
-			// mem[0xC] = 30;
+			
 			mem[3] = 30;
-			mem[12] = 32'b0001_1110;
-			mem[16] = 30;
 			
 		end
 
