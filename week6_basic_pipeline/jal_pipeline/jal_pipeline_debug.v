@@ -527,7 +527,7 @@ module Instruction_Memory (address, instruction, reset);
 	input [31:0] address;
 	output [31:0] instruction;
 
-	reg [31:0] mem [7:0]; // 8 instructions
+	reg [31:0] mem [24:0]; // 25 instructions
 	integer k;
 	
 	// get instruction right away
@@ -535,12 +535,20 @@ module Instruction_Memory (address, instruction, reset);
 
 	// Initial setup at reset posedge
 	always @(negedge reset) begin
-		for (k = 0; k < 8; k = k + 1) begin
+		for (k = 0; k < 25; k = k + 1) begin
 			mem[k] = 32'b0; // add $0 $0 $0
 		end
 
+		mem[0] = 32'b000011_00000_000000000000000010000; // jal 100000
+		mem[1] = 32'b100011_00010_00001_0000000000000100; // lw $1, 4($2)
+
+		mem[16] = 32'b000000_00100_00101_01001_00000_100010; // sub $9, $4, $5
+		mem[17] = 32'b000000_00110_00111_01010_00000_100010; // sub $10, $6, $7
+		mem[18] = 32'b000000_01001_01010_00010_00000_100000; // add $2, $9, $10
+		mem[19] = 32'b000111_11111_000000000000000000000;     // jr $ra
+
 		// jal test
-		mem[0] = 32'b000011_00000_000000000000000000000; // j 1000 
+		// mem[0] = 32'b000011_00000_000000000000000000000; // j 1000 
 
 		// jr test
 		// mem[0] = 32'b000111_11111_000000000000000000011; // j 1000 
