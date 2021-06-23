@@ -22,7 +22,8 @@
 module advanced_pipeline (clk, reset, result, PC_now, Instruction_now,
 	Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
 	load_data, Beq_address, Write_Register,
-	debug_flag_2, Debug_RegWrite, Debug_Write_Data);
+	debug_flag_2, Debug_RegWrite, Debug_Write_Data,
+	Debug_ForWardA, Debug_ForWardB);
 
 	input clk, reset;
 	output [31:0] result, load_data; // ALU result, Data_memory_read
@@ -34,6 +35,9 @@ module advanced_pipeline (clk, reset, result, PC_now, Instruction_now,
 	output [4:0] Write_Register; // Rd value
 	output [31:0] debug_flag_2, Debug_Write_Data; // ALU_result in MEM stage, Write_Data for Register File
 	output Debug_RegWrite; // RegWrite Op Flag
+
+	output [1:0] Debug_ForWardA, Debug_ForWardB;
+
 
 	// IF stage
 	wire [31:0] PC_in;
@@ -155,11 +159,14 @@ module advanced_pipeline (clk, reset, result, PC_now, Instruction_now,
 	Mux_32bit_3to1 ALU_MuxA (.in00(EX_Read_data_1), .in01(WB_Write_Data), .in10(MEM_ALU_result), 
 		.mux_out(muxA_out), .control(ForwardA));
 	Mux_32bit_3to1 ALU_MuxB (.in00(EX_Read_data_2), .in01(WB_Write_Data), .in10(MEM_ALU_result), 
-		.mux_out(muxB_out), .control(ForwardA));
+		.mux_out(muxB_out), .control(ForwardB));
+
+	assign Debug_ForWardA = ForwardA;
+	assign Debug_ForWardB = ForwardB;
 
 	N_bit_MUX #(32) alu_input_mux (.input0(muxB_out), .input1(EX_sign_extended_immi), 
 	 .mux_out(ALU_input_B), .control(EX_ALUSrc));
-	ALU alu_unit (.input1(EX_Read_data_1), .input2(ALU_input_B), 
+	ALU alu_unit (.input1(muxA_out), .input2(ALU_input_B), 
 	 .alu_out(ALU_result), .zero(ALU_zero), .control(operation_code));	
 	assign Shifted_immi = { EX_sign_extended_immi[29:0], 2'b00 };
 	ALU_add_only alu_add_only_unit (.input1(EX_PC_plus4), .input2(Shifted_immi), .add_out(Branch_addr)); 
@@ -178,7 +185,7 @@ module advanced_pipeline (clk, reset, result, PC_now, Instruction_now,
 
 	assign PC_4 = EX_PC_plus4;
 	assign immi_Shifted = Shifted_immi;
-	assign ALU_input_1 = EX_Read_data_1;
+	assign ALU_input_1 = muxA_out;
 	assign ALU_input_2 = ALU_input_B;
 	assign Beq_address = Branch_addr;
 	
@@ -220,9 +227,9 @@ module IF_ID_Stage_Reg (clk, reset, PC_plus4_in, PC_plus4_out,
 
 	output reg [31:0] PC_plus4_out, instruction_out;
 
-	always @(posedge clk or posedge reset) begin
+	always @(posedge clk or negedge reset) begin
 
-		if (reset) begin
+		if (!reset) begin
 			PC_plus4_out <= 32'b0;
 			instruction_out <= 32'b0;
 		end
@@ -268,8 +275,8 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 	// general signal
 	input clk, reset;
 	
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 			RegWrite_out = 1'b0; MemtoReg_out = 1'b0;
 			Branch_out = 1'b0; MemRead_out = 1'b0;
 			MemWrite_out = 1'b0; Jump_out = 1'b0;
@@ -326,8 +333,8 @@ module EX_MEM_Stage_Reg (clk, reset,
 	// general signal
 	input clk, reset;
 
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 		  RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
 		  Branch_out <= 1'b0; MemRead_out <= 1'b0;
 		  MemWrite_out <= 1'b0; Jump_out <= 1'b0;
@@ -367,8 +374,8 @@ module MEM_WB_Stage_Reg (RegWrite_in, RegWrite_out,
 	// general signal
 	input clk, reset;
 	
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 			RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
 			Data_memory_read_out <= 32'b0;  ALU_result_out <= 32'b0;
 			Write_Register_out <= 5'b0;
@@ -390,8 +397,8 @@ module Program_Counter (clk, reset, PC_in, PC_out);
 
 	output reg [31:0] PC_out;
 
-	always @ (posedge clk or posedge reset)	begin
-		if(reset)
+	always @ (posedge clk or negedge reset)	begin
+		if (!reset)
 			PC_out <= 0;
 		else
 			PC_out <= PC_in;
@@ -411,15 +418,21 @@ module Instruction_Memory (address, instruction, reset);
 	assign instruction = mem[address[6:2]];
 
 	// Initial setup at reset posedge
-	always @(posedge reset) begin
+	always @(negedge reset) begin
 		for (k = 0; k < 8; k = k + 1) begin
 			mem[k] = 32'b0; // add $0 $0 $0
 		end
 
-		mem[0] = 32'b000000_00011_00100_00010_00000_100000; // add $2, $3, $4
-		mem[1] = 32'b000000_00011_00100_00001_00000_100010; // sub $1, $3, $4
-		mem[2] = 32'b100011_00110_00101_0000000000000000; // lw $5, 0($6)
-		mem[3] = 32'b000100_00011_00100_1111111111111100; // beq $3, $4, Label (-4)
+		mem[0] = 32'b100011_00010_00001_0000000000000100; // lw $1, 4($2)
+		mem[1] = 32'b000000_00001_00101_00100_00000_100010; // sub $4, $1, $5
+		mem[2] = 32'b000000_00001_00111_00110_00000_100100; // and $6, $1, $7
+		mem[3] = 32'b000000_00001_01001_01000_00000_100101; // or $8, $1, $9
+		mem[5] = 32'b000100_00110_00000_1111111111111011; // beq $6, $0, Label (-5)
+		
+		// mem[0] = 32'b000000_00011_00100_00010_00000_100000; // add $2, $3, $4
+		// mem[1] = 32'b000000_00011_00100_00001_00000_100010; // sub $1, $3, $4
+		// mem[2] = 32'b100011_00110_00101_0000000000000000; // lw $5, 0($6)
+		// mem[3] = 32'b000100_00011_00100_1111111111111100; // beq $3, $4, Label (-4)
 	end
 endmodule
 
@@ -446,7 +459,7 @@ endmodule
 // write: on rising edge; data width 32 bit; address width 5 bit
 // read: on falling edge; data width 32 bit; address width 5 bit
 module Register_File (Read_Register_1, Read_Register_2, 
-	Write_Register, Write_Data, Read_Data_1, Read_Data_2, 
+	Write_Register, Write_Data, Read_Data_1, Read_Data_2,
 	RegWrite, clk, reset);
 
 	input [4:0] Read_Register_1, Read_Register_2, Write_Register;
@@ -454,26 +467,35 @@ module Register_File (Read_Register_1, Read_Register_2,
 	input clk, reset, RegWrite;
 	output reg [31:0] Read_Data_1, Read_Data_2;
 
+
 	reg [31:0] mem [31:0];
 	integer k;
  	
-	always @(posedge clk or posedge reset) begin
-		if (reset) begin
+	always @(posedge clk or negedge reset) begin
+		if (!reset) begin
 			for (k = 0; k < 32; k = k + 1) begin
-				mem[k] = 32'b0;
+				mem[k] <= 32'b0;
 			end
-			mem[3] = 32'b0011;
-			mem[4] = 32'b0011;
-			mem[6] = 32'h0000_0040;
+			mem[1] <= 20;
+			mem[2] <= 8;
+			mem[5] <= 2;
+			mem[6] <= 0;
+			mem[7] <= 1;
+			mem[9] <= 3;
+			// mem[3] = 32'b0011;
+			// mem[4] = 32'b0011;
+			// mem[6] = 32'h0000_0040;
 		end
 		
-		else if (RegWrite)
-			mem[Write_Register] = Write_Data; 
+		else if (RegWrite) begin
+			mem[Write_Register] <= Write_Data;
+		end
+
 	end
 
 	always @(negedge clk) begin
-		Read_Data_1 = mem[Read_Register_1];
-		Read_Data_2 = mem[Read_Register_2];
+		Read_Data_1 <= mem[Read_Register_1];
+		Read_Data_2 <= mem[Read_Register_2];
 	end
 endmodule
 
@@ -609,11 +631,15 @@ module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrit
 	integer k;
 
 	always @(*) begin
-		if (reset) begin
+		if (!reset) begin
 			for (k = 0; k < 64; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
+			// mem[0xC] = 30;
+			mem[3] = 30;
+			mem[12] = 32'b0001_1110;
 			mem[16] = 30;
+			
 		end
 
 		else
@@ -714,6 +740,23 @@ module Forwarding_Unit (EX_RegisterRs, EX_RegisterRt,
 
 endmodule
 
+module stall_for_lw_Control (ID_EX_RegisterRt, IF_ID_RegisterRs, IF_ID_RegisterRt, ID_EX_MemRead, PCWrite, IF_ID_Write, ID_Flush_lwstall);
+	input [4:0] ID_EX_RegisterRt, IF_ID_RegisterRs, IF_ID_RegisterRt;
+	input ID_EX_MemRead;
+	output PCWrite, IF_ID_Write, ID_Flush_lwstall;
+	wire equal_IDEXrt_IFIDrs,equal_IDEXrt_IFIDrt;
+	assign equal_IDEXrt_IFIDrs=(ID_EX_RegisterRt==IF_ID_RegisterRs)?1:0;
+	assign equal_IDEXrt_IFIDrt=(ID_EX_RegisterRt==IF_ID_RegisterRt)?1:0;
+	reg PCWrite, IF_ID_Write, ID_Flush_lwstall;
+	
+	always@(ID_EX_MemRead or equal_IDEXrt_IFIDrs or equal_IDEXrt_IFIDrt)
+	begin
+		if(ID_EX_MemRead & (equal_IDEXrt_IFIDrs|equal_IDEXrt_IFIDrt))
+		begin PCWrite<=0;IF_ID_Write<=0;ID_Flush_lwstall<=1; end
+		else 
+		begin PCWrite<=1;IF_ID_Write<=1;ID_Flush_lwstall<=0; end
+	end
+endmodule
 
 module Mux_32bit_3to1 (in00, in01, in10, mux_out, control);
 	input [31:0] in00, in01, in10;
