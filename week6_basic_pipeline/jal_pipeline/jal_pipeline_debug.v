@@ -66,13 +66,16 @@ module jal_pipeline (clk, reset, result, PC_now, Debug_PC_in, Instruction_now,
 	wire [31:0] JR_Address;
 	wire [31:0] ID_Shifted_immi;
 	wire [31:0] ID_Branch_addr;
+	
 	wire ALUSrc, RegWrite;
 	wire Jump, Branch;
-	wire [1:0] RegDst;
-	wire [1:0] MemtoReg;
 	wire MemRead, MemWrite;
+	wire [1:0] RegDst;
 	wire [1:0] RegDst_t; 
+	wire [1:0] MemtoReg;
 	wire [1:0] MemtoReg_t; 
+
+	wire ALUSrc_t, RegWrite_t;
 	wire Jump_t, Branch_t;
 	wire MemRead_t, MemWrite_t;
 	wire IF_Flush, ID_Flush, EX_Flush;
@@ -620,6 +623,8 @@ module Register_File (Read_Register_1, Read_Register_2,
 			for (k = 0; k < 32; k = k + 1) begin
 				mem[k] <= 32'b0;
 			end
+			mem[1] <= 20;
+			mem[2] <= 8;
 			mem[4] <= 9;
 			mem[5] <= 8;
 			mem[6] <= 7;
@@ -696,10 +701,11 @@ module Control (OpCode, RegDst,  MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, Reg
 	assign MemRead=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
 	// 101011 (sw)
 	assign MemWrite=(OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
-	// 000000 (R-format), 001000 (addi), 001100, 100011 (lw)
+	// 000000 (R-format), 001000 (addi), 001100, 100011 (lw), 000011 : jal
 	assign RegWrite=((~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]))|
  	                ((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0])) |
-						 ((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]));
+					((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]))   |
+					((~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]));
 	// 000100 (beq)
 	assign Branch=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]);
 	// 000010 (j), 000011 : jal, 000111 : jr
