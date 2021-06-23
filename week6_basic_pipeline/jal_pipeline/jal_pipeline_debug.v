@@ -19,27 +19,31 @@
 //
 //////////////////////////////////////////////////////////////////////////////////
 
-module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
+module jal_pipeline (clk, reset, result, PC_now, Debug_PC_in, Instruction_now,
 	Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
 	load_data, Beq_address, J_address, Write_Register,
 	debug_flag_2, Debug_RegWrite, Debug_Write_Data,
 	Debug_PCWrite, Debug_IF_ID_Write, Debug_IF_Flush,
-	Debug_ForWardA, Debug_ForWardB);
+	Debug_ForWardA, Debug_ForWardB, Debug_EX_Write_Register, Debug_EX_RegDst,
+	Debug_Branch_taken, Debug_Branch_MUX_output);
 
 	input clk, reset;
 	output [31:0] result, load_data; // ALU result, Data_memory_read
-	output [31:0] PC_now; // current PC value Debugging,  
+	output [31:0] PC_now, Debug_PC_in; // current PC value Debugging,  
 	output [31:0] Instruction_now; // Fetch stage instruction 
 	output [31:0] Rs_now, Rt_now; // output from Register File 
 	output [31:0] ALU_input_1, ALU_input_2; // ALU inputs
 	output [31:0] PC_4, Beq_address, immi_Shifted; // for Branch Address Debugging
 	output [31:0] J_address; // Jump Address
-	output [4:0] Write_Register; // Rd value
+	output [4:0] Write_Register, Debug_EX_Write_Register; // Rd value
 	output [31:0] debug_flag_2, Debug_Write_Data; // ALU_result in MEM stage, Write_Data for Register File
 	output Debug_RegWrite; // RegWrite Op Flag
 	output Debug_PCWrite, Debug_IF_ID_Write, Debug_IF_Flush;
 
-	output [1:0] Debug_ForWardA, Debug_ForWardB;
+	output [1:0] Debug_ForWardA, Debug_ForWardB, Debug_EX_RegDst;
+
+	output Debug_Branch_taken;
+	output [31:0] Debug_Branch_MUX_output;
 
 
 	// IF stage
@@ -63,10 +67,14 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	wire [31:0] ID_Shifted_immi;
 	wire [31:0] ID_Branch_addr;
 	wire ALUSrc, RegWrite;
-	wire RegDst, Jump, Branch;
-	wire MemRead, MemtoReg, MemWrite;
-	wire RegDst_t, Jump_t, Branch_t;
-	wire MemRead_t, MemtoReg_t, MemWrite_t;
+	wire Jump, Branch;
+	wire [1:0] RegDst;
+	wire [1:0] MemtoReg;
+	wire MemRead, MemWrite;
+	wire [1:0] RegDst_t; 
+	wire [1:0] MemtoReg_t; 
+	wire Jump_t, Branch_t;
+	wire MemRead_t, MemWrite_t;
 	wire IF_Flush, ID_Flush, EX_Flush;
 	wire Jump_Register;
 	wire Rs_Rt_equal;
@@ -79,8 +87,10 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	wire [31:0] EX_Read_data_1, EX_Read_data_2;
 	wire [31:0] EX_sign_extended_immi;
 	wire EX_ALUSrc, EX_RegWrite;
-	wire EX_RegDst, EX_Jump, EX_Branch;
-	wire EX_MemRead, EX_MemtoReg, EX_MemWrite;
+	wire [1:0] EX_RegDst;
+	wire [1:0] EX_MemtoReg;
+	wire EX_Jump, EX_Branch;
+	wire EX_MemRead, EX_MemWrite;
 	wire [1:0] EX_ALUOp;
 	wire [4:0] EX_Write_Register;
 	wire [3:0] operation_code;
@@ -96,20 +106,24 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 
 
 	// MEM stage
+	wire [31:0] MEM_PC_plus4;
 	wire [31:0] MEM_ALU_result, MEM_Read_data_2;
 	wire [4:0] MEM_Write_Register;
 	wire [31:0] Data_memory_read;
 	wire [31:0] MEM_Branch_addr;
-	wire MEM_RegWrite, MEM_MemtoReg, MEM_Branch;
+	wire [1:0] MEM_MemtoReg;
+	wire MEM_RegWrite, MEM_Branch;
 	wire MEM_MemRead, MEM_MemWrite, MEM_Jump;
 	wire MEM_ALU_zero;
 	wire PCSrc;
 
 	// WB stage
+	wire [31:0] WB_PC_plus4;
 	wire [31:0] WB_Data_memory_read, WB_ALU_result;
 	wire [4:0] WB_Write_Register;
 	wire [31:0] WB_Write_Data;
-	wire WB_RegWrite, WB_MemtoReg;
+	wire [1:0] WB_MemtoReg;
+	wire WB_RegWrite;
 
 	//////////////////////////////////
 	//// Instruction Fetch stage /////
@@ -123,7 +137,8 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	assign Debug_PCWrite = PCWrite;
 	assign Debug_IF_Flush = IF_Flush;
 
-	and (Branch_taken, Branch, Rs_Rt_equal);
+	// and (Branch_taken, Branch, Rs_Rt_equal);
+	assign Branch_taken = Branch & Rs_Rt_equal;
 	N_bit_MUX #(32) branch_mux (.input0(PC_plus4), .input1(ID_Branch_addr), 
 	 .mux_out(Branch_MUX_output), .control(Branch_taken));
 	N_bit_MUX #(32) jump_mux (.input0(Branch_MUX_output), .input1(Jump_Address), 
@@ -131,6 +146,10 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	N_bit_MUX #(32) jr_mux (.input0(Jump_MUX_output), .input1(JR_Address), 
 	 .mux_out(PC_in), .control(Jump_Register));
 	
+	assign Debug_Branch_taken = Branch_taken;
+	assign Debug_Branch_MUX_output = Branch_MUX_output;
+	assign Debug_PC_in = PC_in;
+
 	IF_ID_Stage_Reg IF_ID_Stage_Unit (.clk(clk), .reset(reset),
 	 .IF_ID_Write(IF_ID_Write), .IF_Flush(IF_Flush),
 	 .PC_plus4_in(PC_plus4), .PC_plus4_out(ID_PC_plus4),
@@ -205,9 +224,14 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	//////////////////////////////////
 	///////   Execute  stage  ////////
 	//////////////////////////////////
-	N_bit_MUX #(5) write_reg_mux (.input0(EX_instruction[20:16]), .input1(EX_instruction[15:11]), 
+	Mux_5bit_3to1 Dst_Mux (.in00(EX_instruction[20:16]), .in01(EX_instruction[15:11]), .in10(5'b11111), 
 	 .mux_out(EX_Write_Register), .control(EX_RegDst));
+	// N_bit_MUX #(5) write_reg_mux (.input0(EX_instruction[20:16]), .input1(EX_instruction[15:11]), 
+	//  .mux_out(EX_Write_Register), .control(EX_RegDst));
 	ALU_Control alu_control_unit (.ALUOp(EX_ALUOp), .f_code(EX_instruction[5:0]), .operation_code(operation_code));
+
+	assign Debug_EX_RegDst = EX_RegDst;
+	assign Debug_EX_Write_Register = EX_Write_Register;
 
 	Forwarding_Unit forwarding_unit (.EX_RegisterRs(EX_instruction[25:21]), .EX_RegisterRt(EX_instruction[20:16]), 
 	.MEM_RegisterRd(MEM_Write_Register), .WB_RegisterRd(WB_Write_Register), 
@@ -237,7 +261,7 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	.MemRead_in(EX_MemRead), .MemRead_out(MEM_MemRead),
 	.MemWrite_in(EX_MemWrite),.MemWrite_out(MEM_MemWrite),
 	.Jump_in(EX_Jump), .Jump_out(MEM_Jump),
-	// .Branch_addr_in(Branch_addr), .Branch_addr_out(MEM_Branch_addr),
+	.PC_PLUS_4_in(EX_PC_plus4), .PC_PLUS_4_out(MEM_PC_plus4),
 	.ALU_zero_in(ALU_zero), .ALU_zero_out(MEM_ALU_zero),
 	.ALU_result_in(ALU_result), .ALU_result_out(MEM_ALU_result),
 	.Read_data_2_in(EX_Read_data_2), .Read_data_2_out(MEM_Read_data_2), 
@@ -263,6 +287,7 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	MEM_WB_Stage_Reg MEM_WB_Stage_Unit (.clk(clk), .reset(reset),
 	.RegWrite_in(MEM_RegWrite), .RegWrite_out(WB_RegWrite), 
 	.MemtoReg_in(MEM_MemtoReg), .MemtoReg_out(WB_MemtoReg), 
+	.PC_PLUS_4_in(MEM_PC_plus4), .PC_PLUS_4_out(WB_PC_plus4),
 	.Data_memory_read_in(Data_memory_read), .Data_memory_read_out(WB_Data_memory_read), 
 	.ALU_result_in(MEM_ALU_result), .ALU_result_out(WB_ALU_result),
 	.Write_Register_in(MEM_Write_Register), .Write_Register_out(WB_Write_Register));
@@ -270,13 +295,13 @@ module jal_pipeline (clk, reset, result, PC_now, Instruction_now,
 	//////////////////////////////////
 	///   Write Back stage      //////
 	//////////////////////////////////
-	N_bit_MUX #(32) write_data_mux (.input0(WB_ALU_result), .input1(WB_Data_memory_read), 
+	Mux_32bit_3to1 write_data_mux (.in00(WB_ALU_result), .in01(WB_Data_memory_read), .in10(WB_PC_plus4), 
 	 .mux_out(WB_Write_Data), .control(WB_MemtoReg));
 
+	// N_bit_MUX #(32) write_data_mux (.input0(WB_ALU_result), .input1(WB_Data_memory_read), 
+	//  .mux_out(WB_Write_Data), .control(WB_MemtoReg));
+
 	assign Write_Register = WB_Write_Register;
-
-
-
 
 endmodule
 
@@ -326,14 +351,18 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 	instruction_in, instruction_out);
 
 	// WB control signal
-	input RegWrite_in, MemtoReg_in;
-	output reg RegWrite_out, MemtoReg_out;
+	input [1:0] MemtoReg_in;
+	input RegWrite_in;
+	output reg [1:0] MemtoReg_out;
+	output reg RegWrite_out;
 	// MEM control signal
 	input Branch_in, MemRead_in, MemWrite_in, Jump_in;
 	output reg Branch_out, MemRead_out, MemWrite_out, Jump_out;
 	// EX control signal
-	input RegDst_in, ALUSrc_in;
-	output reg RegDst_out, ALUSrc_out;
+	input [1:0] RegDst_in;
+	input ALUSrc_in;
+	output reg [1:0] RegDst_out;
+	output reg ALUSrc_out;
 	input [1:0] ALUOp_in;
 	output reg [1:0] ALUOp_out;
 	// addr content
@@ -350,10 +379,10 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 	
 	always @(posedge clk or negedge reset) begin
 		if (!reset) begin
-			RegWrite_out = 1'b0; MemtoReg_out = 1'b0;
+			RegWrite_out = 1'b0; MemtoReg_out = 2'b0;
 			Branch_out = 1'b0; MemRead_out = 1'b0;
 			MemWrite_out = 1'b0; Jump_out = 1'b0;
-			RegDst_out = 1'b0; ALUSrc_out = 1'b0;
+			RegDst_out = 2'b0; ALUSrc_out = 1'b0;
 			ALUOp_out = 2'b0;
 
 			PC_plus4_out = 32'b0; 
@@ -381,14 +410,20 @@ module EX_MEM_Stage_Reg (clk, reset,
 	RegWrite_in, RegWrite_out, MemtoReg_in, MemtoReg_out, 
 	Branch_in, Branch_out, MemRead_in, MemRead_out, 
 	MemWrite_in, MemWrite_out, Jump_in, Jump_out,
-	// Branch_addr_in, Branch_addr_out, 
+	PC_PLUS_4_in, PC_PLUS_4_out,
 	ALU_zero_in, ALU_zero_out, 
 	ALU_result_in, ALU_result_out, Read_data_2_in, Read_data_2_out, 
 	RegisterRd_in, RegisterRd_out);
 
+	input [31:0] PC_PLUS_4_in;
+	output reg [31:0] PC_PLUS_4_out;
+
+	input [1:0] MemtoReg_in;
+	output reg [1:0] MemtoReg_out;
+
 	// WB control signal
-	input RegWrite_in, MemtoReg_in;
-	output reg RegWrite_out, MemtoReg_out;
+	input RegWrite_in;
+	output reg RegWrite_out;
 	// MEM control signal
 	input Branch_in, MemRead_in, MemWrite_in, Jump_in;
 	output reg Branch_out, MemRead_out, MemWrite_out, Jump_out;
@@ -409,11 +444,10 @@ module EX_MEM_Stage_Reg (clk, reset,
 
 	always @(posedge clk or negedge reset) begin
 		if (!reset) begin
-		  RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
+		  RegWrite_out <= 1'b0; MemtoReg_out <= 2'b00;
 		  Branch_out <= 1'b0; MemRead_out <= 1'b0;
 		  MemWrite_out <= 1'b0; Jump_out <= 1'b0;
-		//   Branch_addr_out <= 32'b0; 
-		  ALU_zero_out <= 1'b0;
+		  ALU_zero_out <= 1'b0; PC_PLUS_4_out <= 32'b0;
 		  ALU_result_out <= 32'b0; Read_data_2_out <= 32'b0;
 		  RegisterRd_out <= 5'b0; 
 		end
@@ -422,8 +456,7 @@ module EX_MEM_Stage_Reg (clk, reset,
 		  RegWrite_out <= RegWrite_in; MemtoReg_out <= MemtoReg_in;
 		  Branch_out <= Branch_in; MemRead_out <= MemRead_in;
 		  MemWrite_out <= MemWrite_in; Jump_out <= Jump_in;
-		//   Branch_addr_out <= Branch_addr_in; 
-		  ALU_zero_out <= ALU_zero_in;
+		  ALU_zero_out <= ALU_zero_in; PC_PLUS_4_out <= PC_PLUS_4_in;
 		  ALU_result_out <= ALU_result_in; Read_data_2_out <= Read_data_2_in;
 		  RegisterRd_out <= RegisterRd_in;
 		end
@@ -437,11 +470,17 @@ module MEM_WB_Stage_Reg (RegWrite_in, RegWrite_out,
 	MemtoReg_in, MemtoReg_out, 
 	Data_memory_read_in, Data_memory_read_out,
 	ALU_result_in, ALU_result_out,
+	PC_PLUS_4_in, PC_PLUS_4_out,
 	Write_Register_in, Write_Register_out, clk, reset);
 	
 	// WB control signal
-	input RegWrite_in, MemtoReg_in;
-	output reg RegWrite_out, MemtoReg_out;
+	input [31:0] PC_PLUS_4_in;
+	output reg [31:0] PC_PLUS_4_out;
+	input [1:0] MemtoReg_in;
+	output reg [1:0] MemtoReg_out;
+
+	input RegWrite_in;
+	output reg RegWrite_out;
 	// data content
 	input [31:0] Data_memory_read_in, ALU_result_in;
 	output reg [31:0] Data_memory_read_out, ALU_result_out;
@@ -452,15 +491,15 @@ module MEM_WB_Stage_Reg (RegWrite_in, RegWrite_out,
 	
 	always @(posedge clk or negedge reset) begin
 		if (!reset) begin
-			RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
-			Data_memory_read_out <= 32'b0;  ALU_result_out <= 32'b0;
-			Write_Register_out <= 5'b0;
+			RegWrite_out <= 1'b0; MemtoReg_out <= 2'b00;
+			Data_memory_read_out <= 32'b0; ALU_result_out <= 32'b0;
+			Write_Register_out <= 5'b0; PC_PLUS_4_out <= 32'b0;
 		end
 
 		else begin
 			RegWrite_out <= RegWrite_in; MemtoReg_out <= MemtoReg_in;
 			Data_memory_read_out <= Data_memory_read_in; ALU_result_out <= ALU_result_in;
-			Write_Register_out <= Write_Register_in;
+			Write_Register_out <= Write_Register_in; PC_PLUS_4_out <= PC_PLUS_4_in;
 		end
 	end
 endmodule
@@ -500,11 +539,32 @@ module Instruction_Memory (address, instruction, reset);
 			mem[k] = 32'b0; // add $0 $0 $0
 		end
 
-		mem[0] = 32'b100011_00010_00001_0000000000000100; // lw $1, 4($2)
-		mem[1] = 32'b000000_00001_00101_00100_00000_100010; // sub $4, $1, $5
-		mem[2] = 32'b000000_00001_00111_00110_00000_100100; // and $6, $1, $7
-		mem[3] = 32'b000000_00001_01001_01000_00000_100101; // or $8, $1, $9
-		mem[4] = 32'b000100_00110_00000_1111111111111011; // beq $6, $0, Label (-5)
+		// jal test
+		mem[0] = 32'b000011_00000_000000000000000000000; // j 1000 
+
+		// jr test
+		// mem[0] = 32'b000111_11111_000000000000000000011; // j 1000 
+
+		// j test
+		// mem[0] = 32'b000010_00000000000000000000000011; // j 1000 
+		// mem[1] = 32'b000010_00000000000000000000000100; // lw $1, 4($2)
+		// mem[2] = 32'b000010_00000000000000000000000000; // j 0000
+		// mem[3] = 32'b000010_00000000000000000000000000; // j 0000
+		
+		// jal
+		// mem[1] = 32'b100011_00010_00001_0000000000000100; // lw $1, 4($2)
+		// mem[1] = 
+
+		// mem[1] = 32'b000000_00001_00101_00100_00000_100010; // sub $4, $1, $5
+		// mem[2] = 32'b000000_00001_00111_00110_00000_100100; // and $6, $1, $7
+		// mem[3] = 32'b000000_00001_01001_01000_00000_100101; // or $8, $1, $9
+		// mem[4] = 32'b000100_00110_00000_1111111111111011; // beq $6, $0, Label (-5)
+		
+		// mem[0] = 32'b100011_00010_00001_0000000000000100; // lw $1, 4($2)
+		// mem[1] = 32'b000000_00001_00101_00100_00000_100010; // sub $4, $1, $5
+		// mem[2] = 32'b000000_00001_00111_00110_00000_100100; // and $6, $1, $7
+		// mem[3] = 32'b000000_00001_01001_01000_00000_100101; // or $8, $1, $9
+		// mem[4] = 32'b000100_00110_00000_1111111111111011; // beq $6, $0, Label (-5)
 		
 		// mem[0] = 32'b000000_00011_00100_00010_00000_100000; // add $2, $3, $4
 		// mem[1] = 32'b000000_00011_00100_00001_00000_100010; // sub $1, $3, $4
@@ -558,7 +618,7 @@ module Register_File (Read_Register_1, Read_Register_2,
 			mem[7] <= 6;
 			
 			mem[2] <= 0;
-			mem[31] <= 0;
+			mem[31] <= 32'b0000;
 			// mem[3] = 32'b0011;
 			// mem[4] = 32'b0011;
 			// mem[6] = 32'h0000_0040;
@@ -592,7 +652,9 @@ module Control (OpCode, RegDst,  MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, Reg
 
 	input [5:0] OpCode;
 	output [1:0] ALUOp;
-	output RegDst, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite;
+	output [1:0] RegDst; 
+	output [1:0] MemtoReg; 
+	output MemRead, MemWrite, ALUSrc, RegWrite;
 	output Jump, Branch;
 	output IF_Flush, ID_Flush, EX_Flush;
 	output Jump_Register;
@@ -606,12 +668,19 @@ module Control (OpCode, RegDst,  MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, Reg
 	// 000011 : jal
 	// 000111 : jr (Not a formal one, only for assigmnet)
 
-	// 000000 (R-format)
-	assign RegDst=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]);
+	// 000000 (R-format) => 01
+	assign RegDst[0]=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]);
+	// 000011 (jal) => 10
+	assign RegDst[1]=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
 	// 000000 (R-format)
 	assign ALUOp[1]=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]);
 	// 000100 (beq)
 	assign ALUOp[0]=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]);
+	// 100011 (lw)
+	assign MemtoReg[0]=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
+	// 000011 (jal) => 10
+	assign MemtoReg[1]=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
+
 	// 100011 (lw), 101011 (sw)
 	assign ALUSrc=((OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]))  | 
 					  ((OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0])); 
@@ -619,8 +688,6 @@ module Control (OpCode, RegDst,  MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, Reg
 	assign MemRead=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
 	// 101011 (sw)
 	assign MemWrite=(OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
-	// 100011 (lw)
-	assign MemtoReg=(OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]);
 	// 000000 (R-format), 001000 (addi), 001100, 100011 (lw)
 	assign RegWrite=((~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0]))|
  	                ((~OpCode[5])&(~OpCode[4])&(OpCode[3])&(~OpCode[2])&(~OpCode[1])&(~OpCode[0])) |
@@ -640,9 +707,9 @@ module Control (OpCode, RegDst,  MemRead, MemtoReg, ALUOp, MemWrite, ALUSrc, Reg
 					(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(OpCode[1])&(OpCode[0]);
 	
 	// jump or branch
-	// 000010 (j), 000011 : jal, 000111 : jr, 000100 : branch
+	// 000011 : jal => NO!!!!
+	// 000010 (j), , 000111 : jr, 000100 : branch
 	assign ID_Flush=(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(~OpCode[0])|
-					(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(~OpCode[2])&(OpCode[1])&(OpCode[0]) | 
 					(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(OpCode[1])&(OpCode[0])  |
 					(~OpCode[5])&(~OpCode[4])&(~OpCode[3])&(OpCode[2])&(~OpCode[1])&(~OpCode[0]);
 
@@ -882,18 +949,22 @@ module Reset_Control (RegDst_in, ALUSrc_in, Branch_in, MemRead_in,
 	RegDst_out, ALUSrc_out, Branch_out, MemRead_out,
 	MemtoReg_out, MemWrite_out, RegWrite_out);
 	
-	input RegDst_in, ALUSrc_in, Branch_in, MemRead_in;
-	input MemtoReg_in, MemWrite_in, RegWrite_in;
+	input [1:0] RegDst_in;
+	input [1:0] MemtoReg_in;
+	input ALUSrc_in, Branch_in, MemRead_in;
+	input MemWrite_in, RegWrite_in;
 	input Control_Reset;
 
-	output RegDst_out, ALUSrc_out, Branch_out, MemRead_out;
-	output MemtoReg_out, MemWrite_out, RegWrite_out;
+	output [1:0] RegDst_out;
+	output [1:0] MemtoReg_out;
+	output ALUSrc_out, Branch_out, MemRead_out;
+	output MemWrite_out, RegWrite_out;
 
-	assign RegDst_out = Control_Reset ? 0 : RegDst_in;
+	assign RegDst_out = Control_Reset ? 2'b00 : RegDst_in;
 	assign ALUSrc_out = Control_Reset ? 0 : ALUSrc_in;
 	assign Branch_out = Control_Reset ? 0 : Branch_in;
 	assign MemRead_out = Control_Reset ? 0 : MemRead_in;
-	assign MemtoReg_out = Control_Reset ? 0 : MemtoReg_in;
+	assign MemtoReg_out = Control_Reset ? 2'b00 : MemtoReg_in;
 	assign MemWrite_out = Control_Reset ? 0 : MemWrite_in;
 	assign RegWrite_out = Control_Reset ? 0 : RegWrite_in;
 
@@ -904,8 +975,22 @@ module Mux_32bit_3to1 (in00, in01, in10, mux_out, control);
 	output [31:0] mux_out;
 	input [1:0] control;
 	reg [31:0] mux_out;
-	always @(in00 or in01 or in10 or control)
-	begin
+	always @(in00 or in01 or in10 or control) begin
+		case(control)
+		2'b00:mux_out<=in00;
+		2'b01:mux_out<=in01;
+		2'b10:mux_out<=in10;
+		default: mux_out<=in00;
+		endcase
+	end 
+endmodule
+
+module Mux_5bit_3to1 (in00, in01, in10, mux_out, control);
+	input [5:0] in00, in01, in10;
+	output [5:0] mux_out;
+	input [1:0] control;
+	reg [5:0] mux_out;
+	always @(in00 or in01 or in10 or control) begin
 		case(control)
 		2'b00:mux_out<=in00;
 		2'b01:mux_out<=in01;
