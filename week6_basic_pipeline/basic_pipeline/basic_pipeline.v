@@ -263,28 +263,28 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 	
 	always @(posedge clk or negedge reset) begin
 		if (!reset) begin
-			RegWrite_out = 1'b0; MemtoReg_out = 1'b0;
-			Branch_out = 1'b0; MemRead_out = 1'b0;
-			MemWrite_out = 1'b0; Jump_out = 1'b0;
-			RegDst_out = 1'b0; ALUSrc_out = 1'b0;
-			ALUOp_out = 2'b0;
+			RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
+			Branch_out <= 1'b0; MemRead_out <= 1'b0;
+			MemWrite_out <= 1'b0; Jump_out <= 1'b0;
+			RegDst_out <= 1'b0; ALUSrc_out <= 1'b0;
+			ALUOp_out <= 2'b0;
 
-			PC_plus4_out = 32'b0; 
-			read_data_1_out = 32'b0; read_data_2_out = 32'b0; 
-			sign_extended_immi_out = 32'b0;
-			instruction_out = 32'b0;	
+			PC_plus4_out <= 32'b0; 
+			read_data_1_out <= 32'b0; read_data_2_out <= 32'b0; 
+			sign_extended_immi_out <= 32'b0;
+			instruction_out <= 32'b0;	
 		end
 
 		else begin
-			RegWrite_out = RegWrite_in; MemtoReg_out = MemtoReg_in;
-			Branch_out = Branch_in; MemRead_out = MemRead_in;
-			MemWrite_out = MemWrite_in; Jump_out = Jump_in;
-			RegDst_out = RegDst_in; ALUSrc_out = ALUSrc_in;
-			ALUOp_out = ALUOp_in; PC_plus4_out = PC_plus4_in;
-			sign_extended_immi_out = sign_extended_immi_in;
-			read_data_1_out = read_data_1_in; 
-			read_data_2_out = read_data_2_in;
-			instruction_out = instruction_in;
+			RegWrite_out <= RegWrite_in; MemtoReg_out <= MemtoReg_in;
+			Branch_out <= Branch_in; MemRead_out <= MemRead_in;
+			MemWrite_out <= MemWrite_in; Jump_out <= Jump_in;
+			RegDst_out <= RegDst_in; ALUSrc_out <= ALUSrc_in;
+			ALUOp_out <= ALUOp_in; PC_plus4_out <= PC_plus4_in;
+			sign_extended_immi_out <= sign_extended_immi_in;
+			read_data_1_out <= read_data_1_in; 
+			read_data_2_out <= read_data_2_in;
+			instruction_out <= instruction_in;
 		end	
 	end	
 endmodule
