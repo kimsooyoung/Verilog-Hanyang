@@ -3,9 +3,9 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date:    18:20:33 06/23/2021 
+// Create Date:    23:36:42 06/21/2021 
 // Design Name: 
-// Module Name:    Startup 
+// Module Name:    startup 
 // Project Name: 
 // Target Devices: 
 // Tool versions: 
@@ -18,7 +18,6 @@
 // Additional Comments: 
 //
 //////////////////////////////////////////////////////////////////////////////////
-
 module Startup(
 	input	clk_50MHz,
 	input reset,
@@ -26,10 +25,13 @@ module Startup(
 	input RXD,
 	output TXD,
 	output reg [15:0] led,
+	//output [15:0] ALU_Result,
 	output reg [3:0] digit,
 	output reg [7:0] fnd,
 	output reg [4:0] keyLed,
 	output reg buzz
+	//output debug_slow_clock,
+	//output [31:0] Debug_ALU
     );
 	 
 	reg [24:0] counter;
@@ -70,9 +72,15 @@ module Startup(
 	reg clk_operating;
 	wire [31:0] ALU_Result;
 
-
 	assign clk_slow = clk_operating;
-	advanced_pipeline my_pipeline(.clk(clk_slow), .reset(reset), .result(ALU_Result));
+	
+	wire slow_clock;
+	
+	clock_divider my_divider(.clk(clk_50MHz), .rst(reset), .clk_operating(slow_clock));
+	//assign debug_slow_clock = slow_clock;
+	
+	advanced_pipeline my_pipeline(.clk(slow_clock), .reset(reset), .result(ALU_Result));
+	//assign Debug_ALU = ALU_Result;
 	
 	//Counter
 	always @(posedge clk_50MHz or negedge reset) begin
@@ -110,7 +118,14 @@ module Startup(
 
 		else begin
 			// 7 9 10 ... 23
-			led<= ALU_Result[15:0];
+			//led <= 16'b0;
+			led <= ALU_Result[15:0];
+			// case(digit_sel)
+			// 	0: begin digit<=4'b1110; number<=0; end
+			// 	1: begin digit<=4'b1101; number<=1; end
+			// 	2: begin digit<=4'b1011; number<=2; end
+			// 	3: begin digit<=4'b0111; number<=3; end	
+			// endcase
 		end
 	end
 	
@@ -332,5 +347,4 @@ module Startup(
      
     assign TXD = tx_bit;
 endmodule
-
 
