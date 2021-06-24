@@ -1,9 +1,33 @@
-# PlanAhead Generated physical constraints 
-
 NET "reset" CLOCK_DEDICATED_ROUTE = FALSE;
 
 NET "clk_50MHz" LOC = P55;
+
+
 NET "reset" LOC = P1;
+
+
+NET "Branch" LOC = P24;
+NET "Jump" LOC = P23;
+NET "RS_RT_Equal" LOC = P22;
+NET "Branch_Taken" LOC = P21;
+
+
+//NET "ALU_Result[15]" LOC = P24;
+//NET "ALU_Result[14]" LOC = P23;
+//NET "ALU_Result[13]" LOC = P22;
+//NET "ALU_Result[12]" LOC = P21;
+NET "ALU_Result[11]" LOC = P17;
+NET "ALU_Result[10]" LOC = P16;
+NET "ALU_Result[9]" LOC = P15;
+NET "ALU_Result[8]" LOC = P14;
+NET "ALU_Result[7]" LOC = P12;
+NET "ALU_Result[6]" LOC = P11;
+NET "ALU_Result[5]" LOC = P10;
+NET "ALU_Result[4]" LOC = P9;
+NET "ALU_Result[3]" LOC = P8;
+NET "ALU_Result[2]" LOC = P7;
+NET "ALU_Result[1]" LOC = P6;
+NET "ALU_Result[0]" LOC = P5;
 
 NET "digit[3]" LOC = P87;
 NET "digit[2]" LOC = P88;
@@ -18,47 +42,3 @@ NET "fnd[3]" LOC = P98;
 NET "fnd[2]" LOC = P97;
 NET "fnd[1]" LOC = P95;
 NET "fnd[0]" LOC = P94;
-
-NET "led[15]" LOC = P24;
-NET "led[14]" LOC = P23;
-NET "led[13]" LOC = P22;
-NET "led[12]" LOC = P21;
-NET "led[11]" LOC = P17;
-NET "led[10]" LOC = P16;
-NET "led[9]" LOC = P15;
-NET "led[8]" LOC = P14;
-NET "led[7]" LOC = P12;
-NET "led[6]" LOC = P11;
-NET "led[5]" LOC = P10;
-NET "led[4]" LOC = P9;
-NET "led[3]" LOC = P8;
-NET "led[2]" LOC = P7;
-NET "led[1]" LOC = P6;
-NET "led[0]" LOC = P5;
-
-#NET "dipSwitch[5]" LOC = P46;
-#NET "dipSwitch[4]" LOC = P45;
-#NET "dipSwitch[3]" LOC = P44;
-#NET "dipSwitch[2]" LOC = P43;
-#NET "dipSwitch[1]" LOC = P41;
-
-NET "keyLed[0]" LOC = P81;
-NET "keyLed[1]" LOC = P82;
-NET "keyLed[2]" LOC = P83;
-NET "keyLed[3]" LOC = P84;
-NET "keyLed[4]" LOC = P85;
-#
-NET "key[0]" LOC = P74;
-NET "key[1]" LOC = P75;
-NET "key[2]" LOC = P78;
-NET "key[3]" LOC = P79;
-NET "key[4]" LOC = P80;
-##
-NET "buzz" LOC = P2;
-#
-#NET "SCL" LOC = P29;
-#NET "SDA" LOC = P30;
-#
-NET "TXD" LOC = P141;
-NET "RXD" LOC = P140;
-#
