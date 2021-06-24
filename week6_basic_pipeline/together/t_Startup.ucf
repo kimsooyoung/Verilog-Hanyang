@@ -1,0 +1,34 @@
+NET "clk_50MHz" LOC = P55;
+NET "reset" LOC = P1;
+
+
+NET "PC[15]" LOC = P24;
+NET "PC[14]" LOC = P23;
+NET "PC[13]" LOC = P22;
+NET "PC[12]" LOC = P21;
+NET "PC[11]" LOC = P17;
+NET "PC[10]" LOC = P16;
+NET "PC[9]" LOC = P15;
+NET "PC[8]" LOC = P14;
+NET "PC[7]" LOC = P12;
+NET "PC[6]" LOC = P11;
+NET "PC[5]" LOC = P10;
+NET "PC[4]" LOC = P9;
+NET "PC[3]" LOC = P8;
+NET "PC[2]" LOC = P7;
+NET "PC[1]" LOC = P6;
+NET "PC[0]" LOC = P5;
+
+NET "digit[3]" LOC = P87;
+NET "digit[2]" LOC = P88;
+NET "digit[1]" LOC = P92;
+NET "digit[0]" LOC = P93;
+#
+NET "fnd[7]" LOC = P102;
+NET "fnd[6]" LOC = P101;
+NET "fnd[5]" LOC = P100;
+NET "fnd[4]" LOC = P99;
+NET "fnd[3]" LOC = P98;
+NET "fnd[2]" LOC = P97;
+NET "fnd[1]" LOC = P95;
+NET "fnd[0]" LOC = P94;
