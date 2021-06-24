@@ -123,7 +123,8 @@ module advanced_pipeline (clk, reset, result, PC_now);
 	// assign Debug_PCWrite = PCWrite;
 	// assign Debug_IF_Flush = IF_Flush;
 
-	and (Branch_taken, Branch, Rs_Rt_equal);
+	assign Branch_taken = Branch & Rs_Rt_equal;
+	// and (Branch_taken, Branch, Rs_Rt_equal);
 	N_bit_MUX #(32) branch_mux (.input0(PC_plus4), .input1(ID_Branch_addr), 
 	 .mux_out(Branch_MUX_output), .control(Branch_taken));
 	N_bit_MUX #(32) jump_mux (.input0(Branch_MUX_output), .input1(Jump_Address), 
