@@ -82,11 +82,11 @@ module Startup(
 
 		else begin
 			counter<=counter+1;
-			clk_operating <= ((counter[3:0] == 4'b1111) ? ~clk_operating: clk_operating );
+			clk_operating <= ((counter == 25'b1_1111_1111_1111_1111_1111_1111) ? ~clk_operating: clk_operating );
 		end
 	end
 
-	
+
 	// // Test Led
 	// always @(posedge counter[24] or negedge reset) begin
 	// 	if (!reset) begin
@@ -99,14 +99,16 @@ module Startup(
 	// 		test_led <= ~test_led;
 	// 	end
 	// end
-
-	// SLOW Led
+	
+	//Led
+	//always @(posedge counter[24] or negedge reset) begin
 	always @(posedge clk_50MHz or negedge reset) begin
 		if (!reset) begin
 			led <= 16'b0;
 		end
 
 		else begin
+			// 7 9 10 ... 23
 			led<= ALU_Result[15:0];
 		end
 	end
