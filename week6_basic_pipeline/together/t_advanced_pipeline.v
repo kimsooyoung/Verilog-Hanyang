@@ -19,7 +19,8 @@
 //
 //////////////////////////////////////////////////////////////////////////////////
 
-module advanced_pipeline (clk, reset, result, PC_now);
+module advanced_pipeline (clk, reset, result, PC_now,
+	d_Branch, d_Jump, d_RS_RT_Equal, d_Branch_Taken);
 	// PC_now, Instruction_now,
 	// Rs_now, Rt_now, ALU_input_1, ALU_input_2, immi_Shifted, PC_4,
 	// load_data, Beq_address, J_address, Write_Register,
@@ -29,6 +30,7 @@ module advanced_pipeline (clk, reset, result, PC_now);
 
 	input clk, reset;
 	output [31:0] result, PC_now; // ALU result
+	input d_Branch, d_Jump, d_RS_RT_Equal, d_Branch_Taken;
 	// output [31:0] load_data; // Data_memory_read
 	// output [31:0] PC_now; // current PC value Debugging,  
 	// output [31:0] Instruction_now; // Fetch stage instruction 
@@ -129,6 +131,11 @@ module advanced_pipeline (clk, reset, result, PC_now);
 	 .mux_out(Branch_MUX_output), .control(Branch_taken));
 	N_bit_MUX #(32) jump_mux (.input0(Branch_MUX_output), .input1(Jump_Address), 
 	 .mux_out(PC_in), .control(Jump));
+
+	assign d_Jump = Jump;
+	assign d_Branch = Branch;
+	assign d_RS_RT_Equal = Rs_Rt_equal;
+	assign d_Branch_Taken = Branch_taken;
 	
 	IF_ID_Stage_Reg IF_ID_Stage_Unit (.clk(clk), .reset(reset),
 	 .IF_ID_Write(IF_ID_Write), .IF_Flush(IF_Flush),
@@ -348,28 +355,28 @@ module ID_EX_Stage_Reg (clk, reset, RegWrite_in, RegWrite_out, MemtoReg_in, Memt
 	
 	always @(posedge clk or posedge reset) begin
 		if (reset) begin
-			RegWrite_out = 1'b0; MemtoReg_out = 1'b0;
-			Branch_out = 1'b0; MemRead_out = 1'b0;
-			MemWrite_out = 1'b0; Jump_out = 1'b0;
-			RegDst_out = 1'b0; ALUSrc_out = 1'b0;
-			ALUOp_out = 2'b0;
+			RegWrite_out <= 1'b0; MemtoReg_out <= 1'b0;
+			Branch_out <= 1'b0; MemRead_out <= 1'b0;
+			MemWrite_out <= 1'b0; Jump_out <= 1'b0;
+			RegDst_out <= 1'b0; ALUSrc_out <= 1'b0;
+			ALUOp_out <= 2'b0;
 
-			PC_plus4_out = 32'b0; 
-			read_data_1_out = 32'b0; read_data_2_out = 32'b0; 
-			sign_extended_immi_out = 32'b0;
-			instruction_out = 32'b0;	
+			PC_plus4_out <= 32'b0; 
+			read_data_1_out <= 32'b0; read_data_2_out <= 32'b0; 
+			sign_extended_immi_out <= 32'b0;
+			instruction_out <= 32'b0;	
 		end
 
 		else begin
-			RegWrite_out = RegWrite_in; MemtoReg_out = MemtoReg_in;
-			Branch_out = Branch_in; MemRead_out = MemRead_in;
-			MemWrite_out = MemWrite_in; Jump_out = Jump_in;
-			RegDst_out = RegDst_in; ALUSrc_out = ALUSrc_in;
-			ALUOp_out = ALUOp_in; PC_plus4_out = PC_plus4_in;
-			sign_extended_immi_out = sign_extended_immi_in;
-			read_data_1_out = read_data_1_in; 
-			read_data_2_out = read_data_2_in;
-			instruction_out = instruction_in;
+			RegWrite_out <= RegWrite_in; MemtoReg_out <= MemtoReg_in;
+			Branch_out <= Branch_in; MemRead_out <= MemRead_in;
+			MemWrite_out <= MemWrite_in; Jump_out <= Jump_in;
+			RegDst_out <= RegDst_in; ALUSrc_out <= ALUSrc_in;
+			ALUOp_out <= ALUOp_in; PC_plus4_out <= PC_plus4_in;
+			sign_extended_immi_out <= sign_extended_immi_in;
+			read_data_1_out <= read_data_1_in; 
+			read_data_2_out <= read_data_2_in;
+			instruction_out <= instruction_in;
 		end	
 	end	
 endmodule
@@ -545,7 +552,7 @@ module Register_File (Read_Register_1, Read_Register_2,
 	reg [31:0] mem [15:0];
 	integer k;
  	
-	always @(*) begin
+	always @(posedge clk or posedge reset) begin
 		if (reset) begin
 			for (k = 0; k < 16; k = k + 1) begin
 				mem[k] <= 32'b0;
@@ -567,7 +574,7 @@ module Register_File (Read_Register_1, Read_Register_2,
 
 	end
 
-	always @(negedge clk) begin
+	always @(*) begin
 		Read_Data_1 <= mem[Read_Register_1];
 		Read_Data_2 <= mem[Read_Register_2];
 	end

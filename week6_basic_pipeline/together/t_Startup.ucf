@@ -1,11 +1,21 @@
+NET "reset" CLOCK_DEDICATED_ROUTE = FALSE;
+
 NET "clk_50MHz" LOC = P55;
+
+
 NET "reset" LOC = P1;
 
 
-NET "ALU_Result[15]" LOC = P24;
-NET "ALU_Result[14]" LOC = P23;
-NET "ALU_Result[13]" LOC = P22;
-NET "ALU_Result[12]" LOC = P21;
+NET "Branch" LOC = P24;
+NET "Jump" LOC = P23;
+NET "RS_RT_Equal" LOC = P22;
+NET "Branch_Taken" LOC = P21;
+
+
+//NET "ALU_Result[15]" LOC = P24;
+//NET "ALU_Result[14]" LOC = P23;
+//NET "ALU_Result[13]" LOC = P22;
+//NET "ALU_Result[12]" LOC = P21;
 NET "ALU_Result[11]" LOC = P17;
 NET "ALU_Result[10]" LOC = P16;
 NET "ALU_Result[9]" LOC = P15;

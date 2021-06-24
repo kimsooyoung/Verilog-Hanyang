@@ -23,7 +23,11 @@ module Startup(
 	input reset,
 	output [15:0] ALU_Result,
 	output reg [3:0] digit,
-	output reg [7:0] fnd
+	output reg [7:0] fnd,
+	output Branch,
+	output Jump,
+	output RS_RT_Equal,
+	output Branch_Taken
     );
 	 
 	reg [24:0] counter;
@@ -43,7 +47,8 @@ module Startup(
 	clock_divider my_divider(.clk(clk_50MHz), .rst(reset), .clk_operating(slow_clock), .my_clk(clk));
 	//assign debug_slow_clock = slow_clock;
 	
-	advanced_pipeline my_pipeline(.clk(slow_clock), .reset(reset), .result(ALU_Result), .PC_now(PC));
+	advanced_pipeline my_pipeline(.clk(slow_clock), .reset(reset), .result(ALU_Result), .PC_now(PC), 
+		.d_Branch(Branch), .d_Jump(Jump), .d_RS_RT_Equal(RS_RT_Equal), .d_Branch_Taken(Branch_Taken));
 	//assign Debug_ALU = ALU_Result;
 	
 	//Fnd number
