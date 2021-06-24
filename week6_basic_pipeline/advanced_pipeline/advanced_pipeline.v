@@ -244,7 +244,7 @@ module advanced_pipeline (clk, reset, result);
 	// assign ALU_input_1 = muxA_out;
 	// assign ALU_input_2 = ALU_input_B;
 	
-	// assign result = ALU_result;
+	assign result = { 27'b0, ALU_result[4:0]};
 
 	//////////////////////////////////
 	///////   Memory  stage  /////////
@@ -541,12 +541,12 @@ module Register_File (Read_Register_1, Read_Register_2,
 	input clk, reset, RegWrite;
 	output reg [31:0] Read_Data_1, Read_Data_2;
 
-	reg [31:0] mem [31:0];
+	reg [31:0] mem [15:0];
 	integer k;
  	
 	always @(*) begin
 		if (!reset) begin
-			for (k = 0; k < 32; k = k + 1) begin
+			for (k = 0; k < 16; k = k + 1) begin
 				mem[k] <= 32'b0;
 			end
 			mem[1] <= 20;
@@ -713,12 +713,12 @@ module Data_Memory (MemAddr, Write_Data, Read_Data, clk, reset, MemRead, MemWrit
 
 	output reg [31:0] Read_Data;
 
-	reg [31:0] mem [63:0];
+	reg [31:0] mem [31:0];
 	integer k;
 
 	always @(*) begin
 		if (!reset) begin
-			for (k = 0; k < 64; k = k + 1) begin
+			for (k = 0; k < 32; k = k + 1) begin
 				mem[k] = 32'b0;
 			end
 			// mem[0xC] = 30;
