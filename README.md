@@ -47,6 +47,8 @@ Consider **byte addressing** for indexing.
 
 Design basic Pipeline Architecture for following instructions. 
 
+> There's Report about this project in folder (Written in Korean)
+
 ```WebAssembly
 $3 = 3, $4 = 3, $6= 0x40, mem[0x40] = 30
 
@@ -57,3 +59,42 @@ Label: add $2, $3, $4
 ```
 
 <img src="./images/basic_pipeline.PNG" width="600"> 
+
+## Project 6 - Basic Pipeline 🚅
+
+Design basic Pipeline Architecture for following instructions. 
+
+> There's Report about this project in folder (Written in Korean)
+
+```WebAssembly
+$3 = 3, $4 = 3, $6= 0x40, mem[0x40] = 30
+
+Label: add $2, $3, $4
+       sub $1, $3, $4
+       lw  $5, 0($6)
+       beq $3, $4, Label
+```
+
+<img src="./images/basic_pipeline.PNG" width="600"> 
+
+## Project 7 - Advanced Pipeline 🌠
+
+Make our Pipeline more smarter!!
+
+*  Supports **EX/WB Forwarding**
+*  **Hazard Detection** and **Flush**
+*  `jr`, `jal` operation supporting
+
+Then, Execute following instructions.
+
+```WebAssembly
+mem[0xC] = 30, $1=20, $2=8, $5=2, $7=1, $9=3, $6=0
+
+Label: Lw $1, 4($2)
+       Sub $4, $1, $5
+       And $6, $1, $7
+       Or  $8, $1, $9
+       Beq $6, $0, Label
+```
+
+<img src="./images/advanced_pipeline.PNG" width="600"> 
