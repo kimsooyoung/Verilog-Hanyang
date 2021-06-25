@@ -58,24 +58,7 @@ Label: add $2, $3, $4
        beq $3, $4, Label
 ```
 
-<img src="./images/basic_pipeline.PNG" width="600"> 
-
-## Project 6 - Basic Pipeline 🚅
-
-Design basic Pipeline Architecture for following instructions. 
-
-> There's Report about this project in folder (Written in Korean)
-
-```WebAssembly
-$3 = 3, $4 = 3, $6= 0x40, mem[0x40] = 30
-
-Label: add $2, $3, $4
-       sub $1, $3, $4
-       lw  $5, 0($6)
-       beq $3, $4, Label
-```
-
-<img src="./images/basic_pipeline.PNG" width="600"> 
+<img src="./images/basic_pipeline.png" width="600"> 
 
 ## Project 7 - Advanced Pipeline 🌠
 
