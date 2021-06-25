@@ -1,6 +1,11 @@
 
 # Verilog-Hanyang
 
+<p align="center">
+    <img src="./images/FPGA.PNG" width="400"> 
+</p>
+
+
 Let's Design MIPS architecture processors 🎞 \
 Repository Computer Architecture Class `@ Hanyang Univ`
 
