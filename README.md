@@ -85,16 +85,41 @@ Make our Pipeline more smarter!!
 *  **Hazard Detection** and **Flush**
 *  `jr`, `jal` operation supporting
 
-Then, Execute following instructions.
+For this project, you must convert these C codes into assembly language first. Then convert to MIPS instruction again.
+
+* C code
+
+```C
+// a, b, c, d: $a0, $a1, $a2, $a3
+// Set initial value for a,b,c,d arbitrarily
+// in my case I set a=9,b=8,c=7,d=6
+//
+// values for results: $v0
+
+
+int sum (int a, int b, int c, int d){
+    int e;
+    e = (a-b)+(c-d);
+    return e;   
+}
+```
+
+* Assembly code
 
 ```WebAssembly
-mem[0xC] = 30, $1=20, $2=8, $5=2, $7=1, $9=3, $6=0
+main:
+    jal sum
+    lw $1, 4($2)
 
-Label: Lw $1, 4($2)
-       Sub $4, $1, $5
-       And $6, $1, $7
-       Or  $8, $1, $9
-       Beq $6, $0, Label
+sum: 
+    sub $9, $4, $5
+    sub $10, $6, $7
+    add $2, $9, $10
+    jr $ra
 ```
+
+> For `jr` and `jal` operations, you must build additional Unit and logic into following diagram
+
+> There's Report about this project in folder (Written in Korean)
 
 <img src="./images/advanced_pipeline.PNG" width="600"> 
