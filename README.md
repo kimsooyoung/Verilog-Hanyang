@@ -1,27 +1,59 @@
 
 # Verilog-Hanyang
 
-<img src="./images/xillinx.png" width="200"> 
+Let's Design MIPS architecture processors 🎞 \
+Repository Computer Architecture Class `@ Hanyang Univ`
 
-Repository for FPGA and Verilog projects based on Computer Architecture Class at Hanyang Univ.
-
-
-> The goal of this project is to design MIPS processors.
-
-## Project 1 - Verilog Basic 
+## Project 1 - Verilog Basic 🏃‍♂️
 
 Simulate the template code and have your student number printed out.
 
 <img src="./week1_print_my_id/simulation_waveforms/print_my_id.png" width="600"> 
 
-## Project 2 -  Mux / Full Adder / Clock Divider
+## Project 2 -  Mux / Full Adder
 
-1. Using block diagrams and truth tables to design `mux`, `half adder`, and `full adder`.
-
-2. Design Clock Divider, using `posedge` of clock operating. 
-
-3. Write **testbench** codes for all above projects.
+Using block diagrams and truth tables to design `mux`, `half adder`, and `full adder`.
 
 <img src="./week2_mux_full_adder_clock_divider/simulation_waveforms/full_adder_block_diagram.png" width="600">
 
+## Project 3 - ALU Design 🖩
+
+<img src="./images/ALU_Diagram.PNG" width="300"> 
+
+Design **1-bit/32-bit ALU**, And it must meet the following conditions.
+
+1. ALU must supports following operations.
+
+<img src="./images/ALU_table.PNG" width="150"> 
+
+2. ALU must handle `overflow` conditions.
+
+<img src="./images/ALU_overflow.PNG" width="300"> 
+
+## Project 4 - Clock Divider ⏰
+
+Our processor clocks so fast, So design n-bit clock divider for future workds (using `posedge` of clock operating.)
+
 <img src="./week2_mux_full_adder_clock_divider/simulation_waveforms/clock_divider_waveform.png" width="600"> 
+
+## Project 5 - Data Memory 💾
+
+Design DRAM Memory for Read/Write Operation.
+Consider **byte addressing** for indexing.
+
+<img src="./images/Memory_map.PNG" width="400"> 
+
+## Project 6 - Basic Pipeline 🚅
+
+Design basic Pipeline Architecture for following instructions. 
+
+```WebAssembly
+$3 = 3, $4 = 3, $6= 0x40, mem[0x40] = 30
+
+Label: add $2, $3, $4
+       sub $1, $3, $4
+       lw  $5, 0($6)
+       beq $3, $4, Label
+```
+
+<img src="./images/basic_pipeline.PNG" width="600"> 
